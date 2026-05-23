@@ -1,0 +1,42 @@
+{
+  "name": "zerodha-rebalancer",
+  "version": "1.0.0",
+  "description": "Zerodha portfolio rebalancing agent using LangChain.js and Kite Connect API",
+  "main": "dist/cli.js",
+  "bin": {
+    "rebalancer": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "ts-node src/cli.ts",
+    "dev:rebalance": "ts-node src/cli.ts rebalance --weights \"INFY:30,TCS:40,HDFC:30\"",
+    "dev:pnl": "ts-node src/cli.ts pnl",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "@langchain/openai": "^0.3.0",
+    "@langchain/langgraph": "^0.2.0",
+    "langchain": "^0.3.0",
+    "kiteconnect": "^4.1.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "winston": "^3.14.2",
+    "winston-console-format": "^1.0.8",
+    "zod": "^3.23.8",
+    "chalk": "^4.1.2",
+    "table": "^6.8.2",
+    "date-fns": "^3.6.0",
+    "axios": "^1.7.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
