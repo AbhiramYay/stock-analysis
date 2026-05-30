@@ -59,20 +59,29 @@ export async function calculateMonthlyPnL(
   let totalPnLAbsolute = 0;
   let totalHoldingValue = 0;
 
-  // Process each holding concurrently with a small concurrency cap
-  const results = await Promise.allSettled(
-    holdings.map((h) => computeStockPnL(h, from, to))
-  );
-
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i];
-    if (result.status === "fulfilled" && result.value) {
-      stocks.push(result.value);
-      totalPnLAbsolute += result.value.pnlAbsolute;
-      totalHoldingValue += result.value.holdingValue;
-    } else if (result.status === "rejected") {
-      log.warn(`Skipping ${holdings[i].symbol} due to error`, {
-        error: result.reason?.message,
+  // Process holdings SEQUENTIALLY to avoid hitting Kite's rate limits.
+  //
+  // Why not Promise.allSettled?
+  //   Each holding needs 3 HTTP requests: instruments list + 2 historical candles.
+  //   Running N holdings in parallel fires 3N requests simultaneously, which
+  //   triggers Kite's 429 "Too many requests" error on the web OMS endpoint.
+  //
+  // The instruments list is fetched only ONCE (cached in kiteClient), so the
+  //   main cost per holding is just 2 throttled candle requests (~800ms each).
+  //   A 10-stock portfolio completes in ~20s — acceptable for a daily workflow.
+  for (let i = 0; i < holdings.length; i++) {
+    const h = holdings[i];
+    log.debug(`PnL progress: ${i + 1}/${holdings.length} — ${h.symbol}`);
+    try {
+      const result = await computeStockPnL(h, from, to);
+      if (result) {
+        stocks.push(result);
+        totalPnLAbsolute += result.pnlAbsolute;
+        totalHoldingValue += result.holdingValue;
+      }
+    } catch (err) {
+      log.warn(`Skipping ${h.symbol} due to error`, {
+        error: (err as Error).message,
       });
     }
   }

@@ -33,11 +33,11 @@ zerodha-rebalancer/
 
 ## Prerequisites
 
-| Requirement | Version |
-|-------------|---------|
-| Node.js | ≥ 18.0 |
-| Zerodha Kite Connect subscription | [developers.kite.trade](https://developers.kite.trade) |
-| OpenAI API key (or Anthropic) | For the LLM agent |
+| Requirement | Notes |
+|-------------|-------|
+| Node.js ≥ 18 | [nodejs.org](https://nodejs.org) |
+| Zerodha account | Regular login at [kite.zerodha.com](https://kite.zerodha.com) — no API subscription needed |
+| OpenAI API key (or Anthropic) | For the LLM agent — [platform.openai.com](https://platform.openai.com) |
 
 ---
 
@@ -60,45 +60,53 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-# Zerodha Kite Connect
-KITE_API_KEY=your_api_key
-KITE_API_SECRET=your_api_secret
-KITE_ACCESS_TOKEN=your_access_token   # generated via Kite login flow
+# Zerodha — paste your enctoken from kite.zerodha.com (see Step 3 below)
+KITE_ENCTOKEN=your_enctoken_here
 
-# LLM (openai or anthropic)
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o
+# FREE default — Google Gemini (get key at aistudio.google.com/apikey, no card)
+LLM_PROVIDER=gemini
+GOOGLE_API_KEY=AIza...
 
 # Optional: set to "true" to auto-execute trades without --execute flag
 AUTO_EXECUTE_TRADES=false
 ```
 
-### 3. Generate Kite Access Token
+### 3. Get your Kite enctoken
 
-The access token expires daily. Use the Kite Connect login flow:
+The enctoken is your Kite **web session cookie** — no API subscription required.
 
 ```bash
-# Open the auth URL in your browser:
-# https://kite.trade/connect/login?api_key=YOUR_KEY&v=3
-# After login, copy the request_token from the redirect URL
-# Then generate access_token:
-
-node -e "
-const { KiteConnect } = require('kiteconnect');
-const kite = new KiteConnect({ api_key: 'YOUR_API_KEY' });
-kite.generateSession('REQUEST_TOKEN', 'YOUR_API_SECRET').then(s => {
-  console.log('access_token:', s.access_token);
-});
-"
+# Interactive step-by-step guide:
+npm run auth
 ```
+
+Or do it manually in 30 seconds:
+
+1. Log in at **[kite.zerodha.com](https://kite.zerodha.com)**
+2. Open DevTools → **Application** → **Cookies** → `kite.zerodha.com`
+3. Copy the value of the **`enctoken`** cookie
+4. Paste it into `.env` as `KITE_ENCTOKEN=<value>`
+
+Or run this one-liner in the browser console (F12 → Console):
+```js
+document.cookie.split("; ").find(r => r.startsWith("enctoken"))?.split("=")[1]
+```
+
+> ⏰ **The enctoken resets daily at 6 AM IST** when Kite clears your web session.
+> Re-run `npm run auth` each morning before using the agent.
 
 ### 4. Build
 
 ```bash
 npm run build
-# Output: dist/
+# Compiles all src/**/*.ts → dist/ via @swc/core (~200ms)
 ```
+
+> **Note on `tsconfig.json`:** This file is required even though the build uses `@swc/core` instead of `tsc`. It serves two purposes:
+> - **`ts-node`** reads it for the `npm run dev`, `npm run auth`, and all `npm run dev:*` scripts (which run TypeScript directly without a pre-build step).
+> - **IDE / editor** (VS Code, WebStorm, etc.) uses it for type-checking, IntelliSense, and error highlighting.
+>
+> Do **not** delete `tsconfig.json`.
 
 ---
 
@@ -281,14 +289,65 @@ User: "rebalance INFY 30%, TCS 40%, HDFC 30%"
 
 ---
 
+## Free LLM Models
+
+No credit card is required for either free provider. The agent defaults to Gemini.
+
+### Option 1 — Google Gemini 2.5 Flash-Lite (recommended)
+
+| Limit | Free allowance |
+|-------|---------------|
+| Requests/day | 1,000 |
+| Tokens/minute | 250,000 |
+| Context window | 1M tokens |
+| Credit card | ❌ Not required |
+
+```bash
+# 1. Get a free API key (takes ~1 min, no card):
+#    https://aistudio.google.com/apikey
+
+# 2. Set in .env:
+LLM_PROVIDER=gemini
+GOOGLE_API_KEY=AIza...
+GEMINI_MODEL=gemini-2.5-flash-lite   # default, can omit
+```
+
+### Option 2 — Groq Llama 3.3 70B (free fallback)
+
+| Limit | Free allowance |
+|-------|---------------|
+| Requests/day | 1,000 |
+| Tokens/minute | 6,000 |
+| Inference speed | ~400 tokens/sec (very fast) |
+| Credit card | ❌ Not required |
+
+> ⚠️ Groq's 6K TPM can be hit during a complex agent run with large tool responses.
+> Prefer Gemini for this agent. Use Groq if you hit Gemini's daily quota.
+
+```bash
+# 1. Get a free API key:
+#    https://console.groq.com/keys
+
+# 2. Set in .env:
+LLM_PROVIDER=groq
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.3-70b-versatile   # default, can omit
+```
+
+---
+
 ## Configuration Reference
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KITE_API_KEY` | — | Kite Connect API key (required) |
-| `KITE_ACCESS_TOKEN` | — | Daily access token (required) |
-| `LLM_PROVIDER` | `openai` | `openai` or `anthropic` |
-| `OPENAI_MODEL` | `gpt-4o` | Any GPT-4 class model |
+| `KITE_ENCTOKEN` | — | Web session token from kite.zerodha.com cookie (required) |
+| `LLM_PROVIDER` | `gemini` | `gemini` · `groq` · `openai` · `anthropic` |
+| `GOOGLE_API_KEY` | — | Free Gemini key from aistudio.google.com |
+| `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Gemini model name |
+| `GROQ_API_KEY` | — | Free Groq key from console.groq.com |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model name |
+| `OPENAI_API_KEY` | — | OpenAI key (paid) |
+| `ANTHROPIC_API_KEY` | — | Anthropic key (paid) |
 | `AUTO_EXECUTE_TRADES` | `false` | Set `true` to skip `--execute` flag |
 | `ORDER_VARIETY` | `regular` | `regular`, `amo`, `co`, `iceberg` |
 | `ORDER_EXCHANGE` | `NSE` | `NSE` or `BSE` |

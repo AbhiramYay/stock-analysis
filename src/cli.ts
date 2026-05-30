@@ -170,8 +170,8 @@ program
   .description("Display current portfolio holdings with weights")
   .action(async () => {
     try {
-      const { getHoldingsRaw } = await import("./tools/getHoldings.js");
-      const { printHoldingsTable } = await import("./utils/display.js");
+      const { getHoldingsRaw } = await import("./tools/getHoldings");
+      const { printHoldingsTable } = await import("./utils/display");
 
       const { holdings, totalValue, totalPnL } = await getHoldingsRaw();
 

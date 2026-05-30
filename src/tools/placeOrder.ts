@@ -36,11 +36,7 @@ export const placeOrderTool = new DynamicStructuredTool({
     transactionType: z
       .enum(["BUY", "SELL"])
       .describe("Whether to buy or sell the stock"),
-    quantity: z
-      .number()
-      .int()
-      .positive()
-      .describe("Number of shares to buy or sell"),
+    quantity: z.number().describe("Number of shares to buy or sell"),
     orderType: z
       .enum(["MARKET", "LIMIT", "SL", "SL-M"])
       .default("MARKET")
@@ -48,7 +44,6 @@ export const placeOrderTool = new DynamicStructuredTool({
       .describe("Order type: MARKET executes immediately, LIMIT requires a price"),
     price: z
       .number()
-      .positive()
       .optional()
       .describe("Limit price (required for LIMIT and SL orders)"),
     exchange: z
@@ -89,10 +84,21 @@ export const placeOrderTool = new DynamicStructuredTool({
       product,
     });
 
-    // Guard: LIMIT orders require a price
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      const msg = "Quantity must be a positive integer";
+      log.error(msg, { quantity });
+      return JSON.stringify({ error: msg });
+    }
+
     if (orderType === "LIMIT" && (!price || price <= 0)) {
       const msg = "LIMIT order requires a valid price > 0";
       log.error(msg);
+      return JSON.stringify({ error: msg });
+    }
+
+    if (price !== undefined && price <= 0) {
+      const msg = "Price must be greater than 0 when provided";
+      log.error(msg, { price });
       return JSON.stringify({ error: msg });
     }
 
