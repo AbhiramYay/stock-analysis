@@ -16,6 +16,10 @@ import { getHoldingsTool, getHoldingsRaw } from "../tools/getHoldings";
 import { getHistoricalPriceTool } from "../tools/getHistoricalPrice";
 import { rebalancePortfolioTool, computeRebalancingPlan } from "../tools/rebalancePortfolio";
 import { placeOrderTool, executeBatchOrders } from "../tools/placeOrder";
+import {
+  riskSentimentTool,
+  analyzePortfolioRiskSentiment,
+} from "../tools/riskSentiment";
 import { calculateMonthlyPnL } from "../utils/pnl";
 import { scopedLogger } from "../utils/logger";
 import type {
@@ -122,6 +126,7 @@ Your capabilities:
 - **getHoldings**: Fetch the user's live portfolio holdings with quantities, prices, values, and weights.
 - **getHistoricalPrice**: Retrieve OHLCV data for any NSE/BSE stock on a specific date.
 - **rebalancePortfolio**: Analyse current vs target weights and generate precise trade suggestions.
+- **riskSentiment**: Analyse portfolio risk and market sentiment using volatility, beta, correlations and recent headlines.
 - **placeOrder**: Execute BUY or SELL orders on Zerodha (use only when explicitly asked).
 
 Rebalancing Workflow:
@@ -148,6 +153,7 @@ function buildAgent() {
     getHoldingsTool,
     getHistoricalPriceTool,
     rebalancePortfolioTool,
+    riskSentimentTool,
     placeOrderTool,
   ];
 
@@ -249,6 +255,49 @@ export async function runRebalanceCommand(
     return {
       success: false,
       command: "rebalance",
+      error,
+      executionTimeMs: Date.now() - start,
+    };
+  }
+}
+
+// ─── Risk & Sentiment Analysis Command ───────────────────────────────────────
+
+export async function runRiskSentimentCommand(
+  lookbackDays = 90
+): Promise<AgentResult> {
+  const start = Date.now();
+  log.info("Starting risk and sentiment analysis", { lookbackDays });
+
+  try {
+    const { holdings, totalValue, totalPnL } = await getHoldingsRaw();
+    const portfolio = {
+      holdings,
+      totalValue,
+      totalPnL,
+      fetchedAt: new Date(),
+    };
+
+    const riskReport = await analyzePortfolioRiskSentiment(lookbackDays);
+
+    log.info("Risk and sentiment analysis complete", {
+      stocks: holdings.map((h) => h.symbol),
+      benchmark: riskReport.benchmarkSymbol,
+    });
+
+    return {
+      success: true,
+      command: "analysis",
+      portfolio,
+      riskReport,
+      executionTimeMs: Date.now() - start,
+    };
+  } catch (err) {
+    const error = (err as Error).message;
+    log.error("Risk and sentiment analysis failed", { error });
+    return {
+      success: false,
+      command: "analysis",
       error,
       executionTimeMs: Date.now() - start,
     };

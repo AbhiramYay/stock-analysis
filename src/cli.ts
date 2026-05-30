@@ -12,6 +12,7 @@ import {
   runRebalanceCommand,
   runPnLCommand,
   runAgentQuery,
+  runRiskSentimentCommand,
   parseTargetWeights,
 } from "./agents/rebalancingAgent";
 import { displayResult } from "./utils/display";
@@ -102,6 +103,36 @@ program
 
       displayResult(result);
 
+      if (!result.success) process.exit(1);
+    } catch (err) {
+      console.error(chalk.red(`\n❌ Error: ${(err as Error).message}\n`));
+      logger.debug("CLI error", { stack: (err as Error).stack });
+      process.exit(1);
+    }
+  });
+
+// ─── Command: analysis ───────────────────────────────────────────────────────
+//
+program
+  .command("analysis")
+  .description("Run portfolio risk and sentiment analysis")
+  .option(
+    "-l, --lookback <days>",
+    "Number of calendar days to use for risk analysis (default: 90)",
+    "90"
+  )
+  .action(async (opts: { lookback: string }) => {
+    try {
+      logger.info("Running risk and sentiment analysis command", { opts });
+
+      const lookbackDays = parseInt(opts.lookback, 10);
+      if (Number.isNaN(lookbackDays) || lookbackDays <= 0) {
+        console.error(chalk.red("--lookback must be a positive integer"));
+        process.exit(1);
+      }
+
+      const result = await runRiskSentimentCommand(lookbackDays);
+      displayResult(result);
       if (!result.success) process.exit(1);
     } catch (err) {
       console.error(chalk.red(`\n❌ Error: ${(err as Error).message}\n`));

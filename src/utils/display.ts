@@ -12,6 +12,7 @@ import type {
   Holding,
   MonthlyPnLReport,
   PlacedOrder,
+  PortfolioRiskSentimentReport,
   RebalancingPlan,
 } from "../types/index";
 
@@ -213,6 +214,65 @@ export function printPnLReport(report: MonthlyPnLReport): void {
   console.log();
 }
 
+// ─── Risk & Sentiment Report ─────────────────────────────────────────────────
+
+export function printRiskSentimentReport(report: PortfolioRiskSentimentReport): void {
+  console.log(chalk.bold.cyan("\n🔎 Portfolio Risk & Sentiment Analysis\n"));
+
+  const headers = [
+    chalk.bold("Symbol"),
+    chalk.bold("Sector"),
+    chalk.bold("Weight %"),
+    chalk.bold("Vol %"),
+    chalk.bold("Beta"),
+    chalk.bold("Corr"),
+    chalk.bold("Sentiment"),
+    chalk.bold("Action"),
+  ];
+
+  const rows = report.stockSummaries.map((summary) => [
+    chalk.white(summary.symbol),
+    chalk.white(summary.sector),
+    `${summary.weight.toFixed(1)}%`,
+    `${summary.volatilityAnnual.toFixed(1)}%`,
+    summary.beta !== null ? summary.beta.toFixed(2) : "n/a",
+    summary.topCorrelation !== null ? summary.topCorrelation.toFixed(2) : "n/a",
+    summary.sentimentLabel === "positive"
+      ? chalk.green("positive")
+      : summary.sentimentLabel === "negative"
+      ? chalk.red("negative")
+      : chalk.grey("neutral"),
+    summary.recommendedAction === "REDUCE"
+      ? chalk.red(summary.recommendedAction)
+      : summary.recommendedAction === "INCREASE"
+      ? chalk.green(summary.recommendedAction)
+      : chalk.yellow(summary.recommendedAction),
+  ]);
+
+  console.log(table([headers, ...rows], { columns: { 2: { alignment: "right" }, 3: { alignment: "right" }, 4: { alignment: "right" }, 5: { alignment: "right" } } }));
+
+  if (report.riskHighlights.length > 0) {
+    console.log(chalk.bold("  Risk Highlights:"));
+    report.riskHighlights.forEach((item) => {
+      console.log(`    • ${chalk.yellow(item)}`);
+    });
+  }
+
+  console.log(chalk.bold("\n  Recommended Actions:"));
+  report.overallRecommendations.forEach((item) => {
+    console.log(`    • ${item}`);
+  });
+
+  console.log(chalk.bold("\n  Sentiment Reasoning:"));
+  report.stockSummaries.forEach((summary) => {
+    console.log(
+      `    • ${chalk.white(summary.symbol)}: ${summary.sentimentLabel} (${summary.sentimentScore}) — ${chalk.grey(summary.sentimentReasoning)}`
+    );
+  });
+
+  console.log();
+}
+
 // ─── Order Results ────────────────────────────────────────────────────────────
 
 export function printOrderResults(orders: PlacedOrder[]): void {
@@ -248,6 +308,10 @@ export function displayResult(result: AgentResult): void {
 
   if (result.plan) {
     printRebalancingPlan(result.plan);
+  }
+
+  if (result.riskReport) {
+    printRiskSentimentReport(result.riskReport);
   }
 
   if (result.pnlReport) {

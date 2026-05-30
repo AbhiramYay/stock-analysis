@@ -147,12 +147,15 @@ export const rebalancePortfolioTool = new DynamicStructuredTool({
     "Trades are only suggested for symbols where drift exceeds the driftThreshold (default 2%).",
   schema: z.object({
     targetWeights: z
-      .record(z.string(), z.number())
+      .record(z.string(), z.number().min(0).max(100))
       .describe(
         "Map of symbol to target allocation %. Example: {\"INFY\": 30, \"TCS\": 40, \"HDFC\": 30}"
       ),
     driftThreshold: z
       .number()
+      .min(0)
+      .max(20)
+      .default(2)
       .optional()
       .describe("Minimum % weight deviation to trigger a trade suggestion (default: 2%)"),
   }),
@@ -168,22 +171,6 @@ export const rebalancePortfolioTool = new DynamicStructuredTool({
     try {
       // Step 1: Fetch live holdings
       const { holdings, totalValue } = await getHoldingsRaw();
-
-      const invalidWeight = Object.entries(targetWeights).find(
-        ([symbol, weight]) =>
-          typeof weight !== "number" || Number.isNaN(weight) || weight < 0 || weight > 100
-      );
-      if (invalidWeight) {
-        const msg = `Invalid targetWeights entry for ${invalidWeight[0]}. Values must be numbers between 0 and 100.`;
-        log.error(msg, { invalidWeight });
-        return JSON.stringify({ error: msg });
-      }
-
-      if (driftThreshold !== undefined && (Number.isNaN(driftThreshold) || driftThreshold < 0 || driftThreshold > 20)) {
-        const msg = "driftThreshold must be a number between 0 and 20";
-        log.error(msg, { driftThreshold });
-        return JSON.stringify({ error: msg });
-      }
 
       if (holdings.length === 0) {
         return JSON.stringify({

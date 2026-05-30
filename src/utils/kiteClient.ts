@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import axios, { AxiosInstance, AxiosError } from "axios";
-import { format, subDays } from "date-fns";
+import { addDays, format, subDays } from "date-fns";
 import type {
   KiteHolding,
   KiteOHLC,
@@ -39,6 +39,7 @@ const RETRY_BASE_MS   = 1500; // exponential backoff: 1.5s, 3s, 6s
 // ─── Axios Client Singleton ───────────────────────────────────────────────────
 
 let _axiosClient: AxiosInstance | null = null;
+const yahooSectorCache = new Map<string, string | undefined>();
 
 /**
  * Returns a lazily-initialized Axios instance authenticated with enctoken.
@@ -153,6 +154,111 @@ async function throttledGet<T>(
 
 // ─── API Wrappers ─────────────────────────────────────────────────────────────
 
+function yahooTicker(symbol: string, exchange: string): string {
+  const suffix = exchange === "BSE" ? "BO" : "NS";
+  return `${symbol}.${suffix}`;
+}
+
+function normalizeSymbol(symbol: string): string {
+  return symbol.trim().toUpperCase();
+}
+
+async function fetchHistoricalPricesViaYahoo(
+  symbol: string,
+  fromDate: Date | string,
+  toDate: Date | string,
+  exchange = "NSE"
+): Promise<KiteOHLC[]> {
+  const ticker = yahooTicker(symbol, exchange);
+  const fromTs = Math.floor(new Date(fromDate).getTime() / 1000);
+  const toTs = Math.floor(addDays(new Date(toDate), 1).getTime() / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}`;
+
+  try {
+    const response = await axios.get(url, {
+      params: {
+        period1: fromTs,
+        period2: toTs,
+        interval: "1d",
+        events: "div,splits",
+      },
+      timeout: 12000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      },
+    });
+
+    const data = response.data;
+    const result = data?.chart?.result?.[0];
+    if (!result || !Array.isArray(result.timestamp)) return [];
+
+    const quote = result.indicators?.quote?.[0];
+    if (!quote) return [];
+
+    const candles: KiteOHLC[] = result.timestamp
+      .map((ts: number, idx: number) => ({
+        date: new Date(ts * 1000),
+        open: quote.open[idx],
+        high: quote.high[idx],
+        low: quote.low[idx],
+        close: quote.close[idx],
+        volume: quote.volume[idx],
+      }))
+      .filter((c) => c.open !== null && c.high !== null && c.low !== null && c.close !== null);
+
+    return candles;
+  } catch (err) {
+    log.warn(`Yahoo fallback failed for ${symbol} (${ticker})`, {
+      error: (err as Error).message,
+    });
+    return [];
+  }
+}
+
+function yahooSectorCacheKey(symbol: string, exchange: string) {
+  return `${normalizeSymbol(symbol)}:${exchange}`;
+}
+
+export async function fetchYahooSector(
+  symbol: string,
+  exchange = "NSE"
+): Promise<string | undefined> {
+  const cacheKey = yahooSectorCacheKey(symbol, exchange);
+  if (yahooSectorCache.has(cacheKey)) {
+    return yahooSectorCache.get(cacheKey);
+  }
+
+  const ticker = yahooTicker(symbol, exchange);
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}`;
+
+  try {
+    const response = await axios.get(url, {
+      params: { modules: "assetProfile" },
+      timeout: 12000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        Accept: "application/json",
+      },
+    });
+
+    const result = response.data?.quoteSummary?.result?.[0];
+    const sector = result?.assetProfile?.sector;
+    if (typeof sector === "string" && sector.trim().length > 0) {
+      yahooSectorCache.set(cacheKey, sector);
+      return sector;
+    }
+
+    yahooSectorCache.set(cacheKey, undefined);
+    return undefined;
+  } catch (err) {
+    log.warn(`Yahoo sector lookup failed for ${symbol} (${ticker})`, {
+      error: (err as Error).message,
+    });
+    yahooSectorCache.set(cacheKey, undefined);
+    return undefined;
+  }
+}
+
 /**
  * Fetch all current equity holdings.
  */
@@ -185,17 +291,36 @@ export async function fetchHistoricalPrice(
   date: Date | string,
   exchange = "NSE"
 ): Promise<KiteOHLC | null> {
+  const targetDate = typeof date === "string" ? new Date(date) : date;
+  const fromDate = subDays(targetDate, 3);
+  const toDate = targetDate;
+
+  // Prefer Yahoo first — quicker and doesn't require instrument token.
+  try {
+    const yahooCandles = await fetchHistoricalPricesViaYahoo(symbol, fromDate, toDate, exchange);
+    if (yahooCandles.length > 0) {
+      const last = yahooCandles[yahooCandles.length - 1];
+      log.debug(
+        `Historical price for ${symbol} (Yahoo): close=${last.close} (${format(last.date, "yyyy-MM-dd")})`
+      );
+      return last;
+    }
+  } catch (err) {
+    log.warn(`Yahoo lookup failed for ${symbol}, will try Kite`, { error: (err as Error).message });
+  }
+
+  // Yahoo returned no data — fall back to Kite path
   const instrumentToken = await resolveInstrumentToken(symbol, exchange);
+
   if (!instrumentToken) {
-    log.warn(`Instrument token not found for ${exchange}:${symbol}`);
+    log.warn(`Instrument token not found for ${exchange}:${symbol}, and Yahoo returned no data`);
     return null;
   }
 
-  const targetDate = typeof date === "string" ? new Date(date) : date;
-  const from = format(subDays(targetDate, 3), "yyyy-MM-dd");
-  const to   = format(targetDate, "yyyy-MM-dd");
+  const from = format(fromDate, "yyyy-MM-dd");
+  const to = format(toDate, "yyyy-MM-dd");
 
-  log.debug(`Fetching historical data for ${symbol}`, { from, to });
+  log.debug(`Fetching historical data for ${symbol} via Kite`, { from, to });
 
   try {
     const data = await throttledGet<{ status: string; data: RawCandle[] }>(
@@ -206,22 +331,69 @@ export async function fetchHistoricalPrice(
     const candles = (data.data ?? []).map(normaliseCandle);
 
     if (candles.length === 0) {
-      log.warn(`No historical data for ${symbol} between ${from} and ${to}`);
+      log.warn(`No historical data for ${symbol} between ${from} and ${to} (Kite)`);
       return null;
     }
 
     const last = candles[candles.length - 1];
     log.debug(
-      `Historical price for ${symbol}: close=${last.close} (${format(last.date, "yyyy-MM-dd")})`
+      `Historical price for ${symbol} (Kite): close=${last.close} (${format(last.date, "yyyy-MM-dd")})`
     );
     return last;
   } catch (err) {
-    log.error(`Failed to fetch historical data for ${symbol}`, {
+    log.warn(`Kite failed to fetch historical data for ${symbol} and Yahoo returned no data`, {
       error: (err as Error).message,
     });
-    throw new Error(
-      `fetchHistoricalPrice failed for ${symbol}: ${(err as Error).message}`
+    return null;
+  }
+}
+
+/**
+ * Fetch historical OHLCV data for a symbol across a date range.
+ * Returns all available daily candles between fromDate and toDate.
+ */
+export async function fetchHistoricalPrices(
+  symbol: string,
+  fromDate: Date | string,
+  toDate: Date | string,
+  exchange = "NSE"
+): Promise<KiteOHLC[]> {
+  const from = typeof fromDate === "string" ? fromDate : format(fromDate, "yyyy-MM-dd");
+  const to = typeof toDate === "string" ? toDate : format(toDate, "yyyy-MM-dd");
+
+  log.debug(`Fetching historical range for ${symbol}`, { from, to });
+
+  // Try Yahoo first — faster and doesn't require instrument token
+  try {
+    const yahooCandles = await fetchHistoricalPricesViaYahoo(symbol, fromDate, toDate, exchange);
+    if (yahooCandles.length > 0) {
+      return yahooCandles.sort((a, b) => a.date.getTime() - b.date.getTime());
+    }
+  } catch (err) {
+    log.warn(`Yahoo historical range lookup failed for ${symbol}, will try Kite`, { error: (err as Error).message });
+  }
+
+  // Yahoo returned no data — fall back to Kite
+  const instrumentToken = await resolveInstrumentToken(symbol, exchange);
+
+  if (!instrumentToken) {
+    log.warn(`Instrument token not found for ${exchange}:${symbol}, and Yahoo returned no data`);
+    return [];
+  }
+
+  try {
+    const data = await throttledGet<{ status: string; data: RawCandle[] }>(
+      `/instruments/historical/${instrumentToken}/day`,
+      { from, to, oi: 0 }
     );
+
+    const candles = (data.data ?? []).map(normaliseCandle);
+    return candles.sort((a, b) => a.date.getTime() - b.date.getTime());
+  } catch (err) {
+    log.warn(`Failed to fetch historical range for ${symbol} via Kite, and Yahoo returned no data`, {
+      error: (err as Error).message,
+    });
+    return [];
   }
 }
 
@@ -334,8 +506,36 @@ async function warmInstrumentCache(exchange: string): Promise<void> {
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.includes("[404]") || msg.includes("Route not found")) {
-        log.warn(`Instruments endpoint ${exchangePath} failed, falling back to /instruments`);
-        rawData = await throttledGet<unknown>("/instruments");
+        log.warn(`Instruments endpoint ${exchangePath} failed, falling back to public instruments feed`);
+        const client = getKiteClient();
+        const publicExchangeUrl = `https://kite.zerodha.com/instruments/${exchange.toUpperCase()}`;
+
+        try {
+          const response = await client.get<string>(publicExchangeUrl, {
+            headers: client.defaults.headers.common,
+            responseType: "text",
+          });
+          rawData = response.data;
+        } catch (publicErr) {
+          log.warn(
+            `Public instruments endpoint ${publicExchangeUrl} failed, falling back to https://kite.zerodha.com/instruments`,
+            { error: (publicErr as Error).message }
+          );
+          const fallbackUrl = "https://kite.zerodha.com/instruments";
+          try {
+            const fallbackResponse = await client.get<string>(fallbackUrl, {
+              headers: client.defaults.headers.common,
+              responseType: "text",
+            });
+            rawData = fallbackResponse.data;
+          } catch (fallbackErr) {
+            log.warn(
+              `Fallback instruments endpoint ${fallbackUrl} failed too. Continuing with empty instrument cache.`,
+              { error: (fallbackErr as Error).message }
+            );
+            rawData = [];
+          }
+        }
       } else {
         throw err;
       }

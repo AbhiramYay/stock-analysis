@@ -15,6 +15,7 @@ zerodha-rebalancer/
 │   │   ├── getHoldings.ts        # Fetch & enrich current portfolio
 │   │   ├── getHistoricalPrice.ts # OHLCV data for any symbol/date
 │   │   ├── rebalancePortfolio.ts # Weight diff → trade suggestions
+│   │   ├── riskSentiment.ts      # Risk, volatility, beta, correlation, and news sentiment analysis
 │   │   └── placeOrder.ts         # Execute BUY/SELL orders
 │   ├── utils/
 │   │   ├── kiteClient.ts         # Singleton KiteConnect client + API wrappers
@@ -165,6 +166,22 @@ npm run dev -- rebalance --weights "INFY:30,TCS:40,HDFC:30" --drift 5
 npm run dev -- pnl
 ```
 
+---
+
+### `analysis` — Portfolio risk and sentiment analysis
+
+```bash
+npm run dev -- analysis
+```
+
+```bash
+npm run dev -- analysis --lookback 120
+```
+
+This command analyses your holdings for volatility, beta, sector concentration, and recent news sentiment, then recommends whether to hold, reduce, or consider increasing exposure.
+
+---
+
 **Sample Output:**
 
 ```
@@ -248,6 +265,7 @@ The four LangChain tools wrap Kite API calls:
 | `getHoldings` | — | Fetch live portfolio, compute weights |
 | `getHistoricalPrice` | symbol, date, exchange | OHLCV data for any date |
 | `rebalancePortfolio` | targetWeights, driftThreshold | Compute BUY/SELL suggestions |
+| `riskSentiment` | lookbackDays | Compute volatility, beta, sector correlation, and sentiment-based adjustments |
 | `placeOrder` | symbol, type, qty, price | Execute a real order |
 
 ---

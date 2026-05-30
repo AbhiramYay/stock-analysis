@@ -121,6 +121,40 @@ export interface MonthlyPnLReport {
   generatedAt: Date;
 }
 
+export type SentimentLabel = "positive" | "neutral" | "negative";
+export type RiskAction =
+  | "REDUCE"
+  | "HOLD"
+  | "CONSIDER REDUCE"
+  | "CONSIDER INCREASE"
+  | "INCREASE";
+
+export interface StockRiskMetrics {
+  symbol: string;
+  sector: string;
+  weight: number;
+  volatilityAnnual: number;
+  beta: number | null;
+  averageCorrelation: number;
+  topCorrelatedSymbol: string | null;
+  topCorrelation: number | null;
+  recentHeadlines: string[];
+  sentimentScore: -1 | 0 | 1;
+  sentimentLabel: SentimentLabel;
+  sentimentReasoning: string;
+  hiddenRiskFlags: string[];
+  recommendedAction: RiskAction;
+}
+
+export interface PortfolioRiskSentimentReport {
+  benchmarkSymbol: string | null;
+  sectorWeights: Record<string, number>;
+  stockSummaries: StockRiskMetrics[];
+  overallRecommendations: string[];
+  riskHighlights: string[];
+  generatedAt: Date;
+}
+
 // ─── Order Types ──────────────────────────────────────────────────────────────
 
 export type OrderVariety = "regular" | "amo" | "co" | "iceberg";
@@ -168,11 +202,12 @@ export interface RebalanceInput {
 /** Agent execution result */
 export interface AgentResult {
   success: boolean;
-  command: "rebalance" | "pnl";
+  command: "rebalance" | "pnl" | "analysis";
   portfolio?: Portfolio;
   plan?: RebalancingPlan;
   placedOrders?: PlacedOrder[];
   pnlReport?: MonthlyPnLReport;
+  riskReport?: PortfolioRiskSentimentReport;
   error?: string;
   executionTimeMs: number;
 }
