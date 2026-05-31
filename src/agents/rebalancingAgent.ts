@@ -312,9 +312,9 @@ export async function runRiskSentimentCommand(
  *   2. Fetch historical prices for last month
  *   3. Compute per-stock and total PnL
  */
-export async function runPnLCommand(): Promise<AgentResult> {
+export async function runPnLCommand(fromDate?: string, toDate?: string): Promise<AgentResult> {
   const start = Date.now();
-  log.info("Starting monthly PnL command...");
+  log.info("Starting monthly PnL command...", { fromDate, toDate });
 
   try {
     // Step 1: Fetch holdings
@@ -330,7 +330,7 @@ export async function runPnLCommand(): Promise<AgentResult> {
 
     // Step 2+3: Compute monthly PnL (fetches historical prices internally)
     log.info("Step 2: Computing monthly PnL...");
-    const pnlReport = await calculateMonthlyPnL(holdings);
+    const pnlReport = await calculateMonthlyPnL(holdings, fromDate, toDate);
 
     log.info("Monthly PnL computed", {
       totalPnL: `₹${pnlReport.totalPnLAbsolute.toFixed(2)}`,

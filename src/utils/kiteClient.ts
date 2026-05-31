@@ -224,15 +224,13 @@ export async function fetchYahooSector(
   exchange = "NSE"
 ): Promise<string | undefined> {
   const cacheKey = yahooSectorCacheKey(symbol, exchange);
-  if (yahooSectorCache.has(cacheKey)) {
-    return yahooSectorCache.get(cacheKey);
-  }
+  if (yahooSectorCache.has(cacheKey)) return yahooSectorCache.get(cacheKey);
 
   const ticker = yahooTicker(symbol, exchange);
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}`;
+  const apiUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}`;
 
   try {
-    const response = await axios.get(url, {
+    const response = await axios.get(apiUrl, {
       params: { modules: "assetProfile" },
       timeout: 12000,
       headers: {
@@ -248,12 +246,28 @@ export async function fetchYahooSector(
       return sector;
     }
 
+    // JSON lookup didn't yield sector — try HTML profile page
+    try {
+      const profileUrl = `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/profile`;
+      const htmlRes = await axios.get(profileUrl, {
+        timeout: 12000,
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+      });
+      const html = htmlRes.data as string;
+      const match = html.match(/Sector\s*<\/span>\s*<span[^>]*>([^<]+)<\/span>/i) || html.match(/Sector\(s\):\s*<span[^>]*>([^<]+)<\/span>/i);
+      const sectorFromHtml = match ? match[1].trim() : undefined;
+      if (sectorFromHtml) {
+        yahooSectorCache.set(cacheKey, sectorFromHtml);
+        return sectorFromHtml;
+      }
+    } catch (htmlErr) {
+      log.debug(`Yahoo HTML profile fallback failed for ${symbol} (${ticker})`, { error: (htmlErr as Error).message });
+    }
+
     yahooSectorCache.set(cacheKey, undefined);
     return undefined;
   } catch (err) {
-    log.warn(`Yahoo sector lookup failed for ${symbol} (${ticker})`, {
-      error: (err as Error).message,
-    });
+    log.warn(`Yahoo sector lookup failed for ${symbol} (${ticker})`, { error: (err as Error).message });
     yahooSectorCache.set(cacheKey, undefined);
     return undefined;
   }

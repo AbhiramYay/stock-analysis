@@ -148,12 +148,35 @@ program
 
 program
   .command("pnl")
-  .description("Show last month's gains and losses per stock")
-  .action(async () => {
+  .description("Show gains and losses for a date range (defaults to last calendar month)")
+  .option("--from <date>", "Start date (inclusive) in YYYY-MM-DD format — defaults to start of last month")
+  .option("--to <date>", "End date (inclusive) in YYYY-MM-DD format — defaults to end of last month")
+  .action(async (opts: { from?: string; to?: string }) => {
     try {
-      logger.info("Running monthly PnL command");
+      logger.info("Running monthly PnL command", { opts });
+      // Fallback: accept positional dates after the command (e.g. `pnl 2026-05-01 2026-05-30`)
+      if (!opts.from && !opts.to) {
+        const argv = process.argv || [];
+        const idx = argv.findIndex((a) => a === "pnl");
+        if (idx !== -1) {
+          const maybeFrom = argv[idx + 1];
+          const maybeTo = argv[idx + 2];
+          if (maybeFrom && /^\d{4}-\d{2}-\d{2}$/.test(maybeFrom)) opts.from = maybeFrom;
+          if (maybeTo && /^\d{4}-\d{2}-\d{2}$/.test(maybeTo)) opts.to = maybeTo;
+        }
+      }
 
-      const result = await runPnLCommand();
+      // Validate date inputs if provided
+      if (opts.from && isNaN(new Date(opts.from).getTime())) {
+        console.error(chalk.red("--from must be a valid date in YYYY-MM-DD format"));
+        process.exit(1);
+      }
+      if (opts.to && isNaN(new Date(opts.to).getTime())) {
+        console.error(chalk.red("--to must be a valid date in YYYY-MM-DD format"));
+        process.exit(1);
+      }
+
+      const result = await runPnLCommand(opts.from, opts.to);
       displayResult(result);
 
       if (!result.success) process.exit(1);

@@ -46,11 +46,16 @@ export function getLastMonthPeriod(): { from: Date; to: Date } {
  * @returns         Full monthly PnL report
  */
 export async function calculateMonthlyPnL(
-  holdings: Holding[]
+  holdings: Holding[],
+  fromDate?: Date | string,
+  toDate?: Date | string
 ): Promise<MonthlyPnLReport> {
-  const { from, to } = getLastMonthPeriod();
+  const period = fromDate && toDate
+    ? { from: typeof fromDate === "string" ? new Date(fromDate) : fromDate, to: typeof toDate === "string" ? new Date(toDate) : toDate }
+    : getLastMonthPeriod();
+  const { from, to } = period;
 
-  log.info("Calculating monthly PnL", {
+    log.info("Calculating monthly PnL", {
     period: `${format(from, "yyyy-MM-dd")} → ${format(to, "yyyy-MM-dd")}`,
     symbols: holdings.map((h) => h.symbol),
   });
