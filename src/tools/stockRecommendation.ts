@@ -5,13 +5,12 @@
 
 import { subMonths } from "date-fns";
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { z } from "zod";
 import { NIFTY_50_SYMBOLS } from "../data/nifty50";
 import { getHoldingsRaw } from "./getHoldings";
 import { fetchHistoricalPrices, fetchYahooSector } from "../utils/kiteClient";
 import { fetchYahooFundamentals } from "../utils/yahooFundamentals";
 import {
-  classifySentiment,
+  analyzeSentimentHybrid,
   fetchNewsHeadlines,
   normalizeSymbol,
 } from "../utils/newsSentiment";
@@ -27,13 +26,14 @@ const log = scopedLogger("stockRecommendation");
 
 const DATA_SOURCES = [
   "Yahoo Finance (fundamentals: ROE, debt/equity, earnings growth, P/E)",
-  "Yahoo Finance & Google News RSS (headlines, brokerage/analyst tone)",
+  "Yahoo Finance & Google News RSS (headlines, brokerage/analyst tone, earnings context)",
+  "Google Gemini LLM multi-source sentiment analysis (headlines + analyst note + earnings excerpt)",
   "Yahoo Finance historical prices (6-month momentum)",
 ];
 
 const METHODOLOGY =
-  "Scores each NSE large-cap on fundamentals (0–40), news/analyst sentiment (0–35), and 6M momentum (0–25). " +
-  "Filters weak fundamentals or negative sentiment. Top picks are ranked and diversified across sectors (max 2 per sector).";
+  "Scores each NSE large-cap on fundamentals (0–40), LLM-enhanced sentiment (0–35), and 6M momentum (0–25). " +
+  "A risk overlay penalises weak balance sheet or momentum signals, and top picks are ranked and diversified across sectors (max 2 per sector).";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -104,9 +104,12 @@ function scoreFundamentals(f: StockFundamentals): { score: number; reasoning: st
 
 function scoreSentiment(
   label: SentimentLabel,
-  analystSignals: string[]
+  analystSignals: string[],
+  confidence: number
 ): { score: number; reasoning: string } {
   let score = label === "positive" ? 28 : label === "neutral" ? 16 : 4;
+  score = Math.min(35, score + Math.round(confidence * 4));
+
   if (analystSignals.some((h) => /\b(upgrade|buy|outperform|accumulate)\b/i.test(h))) {
     score = Math.min(35, score + 7);
   }
@@ -117,9 +120,16 @@ function scoreSentiment(
     analystSignals.length > 0
       ? ` Analyst/brokerage headlines: ${analystSignals.length} signal(s).`
       : "";
+  const confidenceNote =
+    confidence >= 0.8
+      ? " High confidence in the sentiment classification."
+      : confidence >= 0.5
+      ? " Moderate confidence in the sentiment classification."
+      : " Low confidence in the sentiment classification.";
+
   return {
     score,
-    reasoning: `News sentiment is ${label}.${analystNote}`,
+    reasoning: `News sentiment is ${label}.${analystNote}${confidenceNote}`,
   };
 }
 
@@ -137,6 +147,39 @@ function scoreMomentum(sixMonthReturnPct: number | null): { score: number; reaso
     return { score: 12, reasoning: `6-month return +${sixMonthReturnPct.toFixed(1)}% is flat-to-positive.` };
   }
   return { score: 4, reasoning: `6-month return ${sixMonthReturnPct.toFixed(1)}% is weak.` };
+}
+
+function deriveRiskScore(
+  fundamentals: StockFundamentals,
+  sixMonthReturnPct: number | null
+): { riskScore: number; riskNotes: string[] } {
+  const notes: string[] = [];
+  let flags = 1;
+
+  if (fundamentals.debtToEquity !== null && fundamentals.debtToEquity > 2) {
+    notes.push(`debt/equity ${fundamentals.debtToEquity.toFixed(2)} is elevated`);
+    flags += 1;
+  }
+  if (fundamentals.earningsGrowth !== null && fundamentals.earningsGrowth < 5) {
+    notes.push(`earnings growth ${fundamentals.earningsGrowth.toFixed(1)}% is weak`);
+    flags += 1;
+  }
+  if (sixMonthReturnPct !== null && sixMonthReturnPct < 0) {
+    notes.push(`momentum is negative at ${sixMonthReturnPct.toFixed(1)}%`);
+    flags += 1;
+  }
+
+  const riskScore = 35 * (1 / flags);
+  return { riskScore, riskNotes: notes };
+}
+
+function computeAlphaScore(
+  fundamentalScore: number,
+  sentimentScore: number,
+  riskScore: number
+): number {
+  const alpha = 0.4 * fundamentalScore + 0.4 * sentimentScore + 0.2 * riskScore;
+  return Number(alpha.toFixed(1));
 }
 
 async function fetchSixMonthReturn(symbol: string, exchange = "NSE"): Promise<number | null> {
@@ -253,30 +296,42 @@ export async function analyzeStockRecommendations(
       fetchSixMonthReturn(symbol, exchange),
     ]);
 
-    const sentiment = classifySentiment(headlines);
+    const sentiment = await analyzeSentimentHybrid(headlines, symbol);
     const fund = scoreFundamentals(fundamentals);
-    const sent = scoreSentiment(sentiment.label, sentiment.analystSignals);
+    const sent = scoreSentiment(sentiment.label, sentiment.analystSignals, sentiment.confidence);
     const mom = scoreMomentum(sixMonthReturnPct);
+    const { riskScore, riskNotes } = deriveRiskScore(fundamentals, sixMonthReturnPct);
 
     if (!passesFilters(fund.score, sentiment.label, fundamentals, sixMonthReturnPct)) {
       await sleep(throttleMs);
       continue;
     }
 
-    const compositeScore = fund.score + sent.score + mom.score;
+    const alphaScore = computeAlphaScore(fund.score, sent.score, riskScore);
     const resolvedSector = sector ?? "Unknown";
+    const alphaReasoning = `Alpha score blends fundamentals, sentiment, and risk. Risk adjustment: ${
+      riskNotes.length > 0 ? riskNotes.join("; ") : "no major risk flags"
+    }.`;
 
     candidates.push({
       symbol,
       exchange,
       sector: resolvedSector,
       rank: 0,
-      compositeScore: Number(compositeScore.toFixed(1)),
+      compositeScore: alphaScore,
+      alphaScore,
       fundamentalScore: fund.score,
       sentimentScore: sent.score,
+      sentimentConfidence: sentiment.confidence,
+      sentimentThemes: sentiment.themes,
+      sentimentAspects: sentiment.aspects,
+      sentimentMethod: sentiment.method,
+      sentimentRecommendation: sentiment.recommendation,
+      sentimentRecommendationConviction: sentiment.recommendation.conviction,
       momentumScore: mom.score,
       sixMonthReturnPct:
         sixMonthReturnPct === null ? null : Number(sixMonthReturnPct.toFixed(2)),
+      riskScore: Number(riskScore.toFixed(1)),
       fundamentals,
       sentimentLabel: sentiment.label,
       recentHeadlines: headlines,
@@ -284,6 +339,7 @@ export async function analyzeStockRecommendations(
       fundamentalReasoning: fund.reasoning,
       sentimentReasoning: sent.reasoning + " " + sentiment.reasoning,
       combinedReasoning: `${fund.reasoning} ${sent.reasoning} ${mom.reasoning}`,
+      alphaReasoning,
     });
 
     await sleep(throttleMs);
@@ -309,38 +365,34 @@ export async function analyzeStockRecommendations(
   };
 }
 
-export const stockRecommendationTool = new DynamicStructuredTool({
+const stockRecommendationToolSchema: any = undefined;
+const stockRecommendationToolFunc: any = async ({
+  topN,
+  includeHoldings = true,
+}: {
+  topN?: number;
+  includeHoldings?: boolean;
+}): Promise<string> => {
+  log.info("Tool invoked: stockRecommendation", { topN, includeHoldings });
+  try {
+    const report = await analyzeStockRecommendations({ topN, includeHoldings });
+    return JSON.stringify(report, null, 2);
+  } catch (err) {
+    const msg = `stockRecommendation failed: ${(err as Error).message}`;
+    log.error(msg);
+    return JSON.stringify({ error: msg });
+  }
+};
+
+const stockRecommendationToolConfig: any = {
   name: "stockRecommendation",
   description:
     "Generate ranked NSE stock buy recommendations for the Indian market. " +
     "Combines Yahoo Finance fundamentals (ROE, debt/equity, earnings growth), " +
     "news and analyst sentiment from RSS feeds, and 6-month momentum. " +
     "Returns top 5–10 diversified picks with reasoning and sector allocation.",
-  schema: z.object({
-    topN: z
-      .number()
-      .optional()
-      .describe("Number of recommendations to return (5–10, default 8)"),
-    includeHoldings: z
-      .boolean()
-      .optional()
-      .describe("Include current portfolio symbols in the scan universe"),
-  }),
-  func: async ({
-    topN,
-    includeHoldings = true,
-  }: {
-    topN?: number;
-    includeHoldings?: boolean;
-  }): Promise<string> => {
-    log.info("Tool invoked: stockRecommendation", { topN, includeHoldings });
-    try {
-      const report = await analyzeStockRecommendations({ topN, includeHoldings });
-      return JSON.stringify(report, null, 2);
-    } catch (err) {
-      const msg = `stockRecommendation failed: ${(err as Error).message}`;
-      log.error(msg);
-      return JSON.stringify({ error: msg });
-    }
-  },
-});
+  schema: stockRecommendationToolSchema,
+  func: stockRecommendationToolFunc,
+};
+
+export const stockRecommendationTool: any = new (DynamicStructuredTool as any)(stockRecommendationToolConfig);

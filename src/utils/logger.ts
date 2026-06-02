@@ -3,7 +3,7 @@
 //  Structured Winston logger with console and optional file transport
 // ─────────────────────────────────────────────────────────────────────────────
 
-import winston from "winston";
+import * as winston from "winston";
 
 const { combine, timestamp, colorize, printf, errors } = winston.format;
 

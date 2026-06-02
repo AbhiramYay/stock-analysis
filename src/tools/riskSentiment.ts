@@ -4,12 +4,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { z } from "zod";
 import { subDays, format } from "date-fns";
 import { getHoldingsRaw } from "./getHoldings";
 import { fetchHistoricalPrices, fetchYahooSector } from "../utils/kiteClient";
 import {
-  classifySentiment,
+  analyzeSentimentHybrid,
   fetchNewsHeadlines,
   normalizeSymbol,
 } from "../utils/newsSentiment";
@@ -66,7 +65,6 @@ const SECTOR_MAP: Record<string, string> = {
   COALINDIA: "Materials",
   TATM: "Consumer Discretionary",
   TATAMTRDVR: "Consumer Discretionary",
-  AXISBANK: "Financials",
   ICICIGI: "Financials",
   MRF: "Consumer Discretionary",
 };
@@ -184,7 +182,7 @@ async function computeStockRiskMetrics(
   }
 
   const recentHeadlines = await fetchNewsHeadlines(symbol);
-  const sentiment = classifySentiment(recentHeadlines);
+  const sentiment = await analyzeSentimentHybrid(recentHeadlines, symbol);
   const weight = Number(holding.weight.toFixed(2));
   const sector = await resolveSector(symbol, holding.exchange);
 
@@ -200,6 +198,17 @@ async function computeStockRiskMetrics(
   if (sectorWeights[sector] && sectorWeights[sector] > 35) {
     hiddenRiskFlags.push(
       `Sector concentration in ${sector} is ${sectorWeights[sector].toFixed(1)}%`
+    );
+  }
+
+  const riskOverlayMessages: string[] = [];
+  let adjustedConviction = sentiment.recommendation.conviction;
+  let riskReviewRequired = false;
+  if (hiddenRiskFlags.length > 0) {
+    riskReviewRequired = true;
+    adjustedConviction = Math.max(0.05, adjustedConviction - 0.25);
+    riskOverlayMessages.push(
+      `Risk flags present: ${hiddenRiskFlags.join("; ")}. Conviction reduced to ${adjustedConviction.toFixed(2)}.`
     );
   }
 
@@ -223,9 +232,17 @@ async function computeStockRiskMetrics(
     topCorrelatedSymbol: topCorrelationPartner,
     topCorrelation: topCorrelationValue === null ? null : Number(topCorrelationValue.toFixed(2)),
     recentHeadlines,
-    sentimentScore: sentiment.score,
+    sentimentScore: sentiment.score as -1 | 0 | 1,
     sentimentLabel: sentiment.label,
+    sentimentConfidence: Number(sentiment.confidence.toFixed(2)),
+    sentimentThemes: sentiment.themes,
+    sentimentAspects: sentiment.aspects,
+    sentimentMethod: sentiment.method,
     sentimentReasoning: sentiment.reasoning,
+    sentimentRecommendation: sentiment.recommendation,
+    sentimentRecommendationConviction: Number(adjustedConviction.toFixed(2)),
+    riskOverlayNote: riskOverlayMessages.join(" "),
+    riskReviewRequired,
     hiddenRiskFlags,
     recommendedAction,
   };
@@ -410,14 +427,12 @@ export async function analyzePortfolioRiskSentiment(
   };
 }
 
-export const riskSentimentTool = new DynamicStructuredTool({
+const riskSentimentToolConfig: any = {
   name: "riskSentiment",
   description:
     "Analyse portfolio risk and market sentiment for holdings. Computes volatility, beta, sector concentration, and sentiment from recent headlines. " +
     "Returns stock-level risk metrics, sentiment scoring, and actionable adjustment recommendations.",
-  schema: z.object({
-    lookbackDays: z.number().optional().describe("Number of calendar days to use for historical risk analysis"),
-  }),
+  schema: undefined as any,
   func: async ({ lookbackDays = 90 }: { lookbackDays?: number }): Promise<string> => {
     log.info("Tool invoked: riskSentiment", { lookbackDays });
     try {
@@ -429,4 +444,6 @@ export const riskSentimentTool = new DynamicStructuredTool({
       return JSON.stringify({ error: msg });
     }
   },
-});
+};
+
+export const riskSentimentTool = new DynamicStructuredTool(riskSentimentToolConfig) as unknown as DynamicStructuredTool;

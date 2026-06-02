@@ -1,6 +1,8 @@
 import axios from "axios";
 import { scopedLogger } from "./logger";
-import type { SentimentLabel } from "../types/index";
+import type { EnhancedSentimentResult, SentimentLabel } from "../types/index";
+import { analyzeSentimentWithLLM, convertKeywordSentiment } from "./llmSentiment";
+import { fetchYahooFundamentals } from "./yahooFundamentals";
 
 const log = scopedLogger("newsSentiment");
 
@@ -78,6 +80,68 @@ const GOOGLE_ANALYST_RSS = (symbol: string) =>
 
 export function normalizeSymbol(symbol: string): string {
   return symbol.trim().toUpperCase();
+}
+
+function stripHtml(text: string): string {
+  return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ",).trim();
+}
+
+function parseRssItems(xml: string): Array<{ title: string; snippet?: string }> {
+  const items: Array<{ title: string; snippet?: string }> = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const itemXml = match[1];
+    const titleMatch = /<title>(.*?)<\/title>/i.exec(itemXml);
+    const descMatch = /<description>(.*?)<\/description>/i.exec(itemXml);
+    const title = titleMatch?.[1]?.trim() ?? "";
+    const snippet = descMatch?.[1]
+      ? stripHtml(descMatch[1].trim())
+      : undefined;
+
+    if (title && !title.toLowerCase().includes("yahoo finance") && !title.toLowerCase().includes("google news")) {
+      items.push({ title, snippet });
+    }
+  }
+
+  return items;
+}
+
+function extractAnalystNote(headlines: string[]): string {
+  const analystPatterns = /\b(upgrade|downgrade|buy|sell|outperform|underperform|accumulate|overweight|underweight|target raised|target cut|brokerage|analyst)\b/i;
+  const analystHeadlines = headlines.filter((headline) => analystPatterns.test(headline));
+  return analystHeadlines.slice(0, 3).join(" | ");
+}
+
+async function buildEarningsExcerpt(symbol: string, exchange = "NSE"): Promise<string> {
+  try {
+    const fundamentals = await fetchYahooFundamentals(symbol, exchange);
+    const facts: string[] = [];
+    if (fundamentals.earningsGrowth !== null) {
+      facts.push(`earnings growth ${fundamentals.earningsGrowth.toFixed(1)}%`);
+    }
+    if (fundamentals.peRatio !== null) {
+      facts.push(`forward P/E ${fundamentals.peRatio.toFixed(1)}`);
+    }
+    if (fundamentals.debtToEquity !== null) {
+      facts.push(`debt/equity ${fundamentals.debtToEquity.toFixed(2)}`);
+    }
+    if (fundamentals.roe !== null) {
+      facts.push(`return on equity ${fundamentals.roe.toFixed(1)}%`);
+    }
+
+    if (facts.length === 0) {
+      return "";
+    }
+
+    return `Earnings excerpt: ${facts.join("; ")}.`;
+  } catch (err) {
+    log.warn(`Failed to build earnings excerpt for ${symbol}`, {
+      error: (err as Error).message,
+    });
+    return "";
+  }
 }
 
 function tokenize(text: string): string[] {
@@ -175,26 +239,52 @@ function parseRssTitles(xml: string): string[] {
 export async function fetchNewsHeadlines(symbol: string): Promise<string[]> {
   const normalized = normalizeSymbol(symbol);
   const yahooSymbol = normalized.includes("-") ? normalized : `${normalized}.NS`;
-  const urls = [
-    YAHOO_RSS(yahooSymbol),
-    GOOGLE_RSS(normalized),
-    GOOGLE_ANALYST_RSS(normalized),
+  const sources = [
+    { url: YAHOO_RSS(yahooSymbol) },
+    { url: GOOGLE_RSS(normalized) },
+    { url: GOOGLE_ANALYST_RSS(normalized) },
   ];
   const headlines = new Set<string>();
 
-  for (const url of urls) {
+  for (const source of sources) {
     try {
-      const response = await axios.get<string>(url, {
+      const response = await axios.get<string>(source.url, {
         timeout: 9000,
         headers: { Accept: "application/rss+xml, application/xml, text/xml" },
       });
-      parseRssTitles(response.data)
+      parseRssItems(response.data)
         .slice(0, 6)
-        .forEach((title) => headlines.add(title));
+        .forEach((item) => {
+          const text = item.snippet
+            ? `${item.title} — ${item.snippet}`
+            : item.title;
+          headlines.add(text);
+        });
     } catch (err) {
-      log.warn(`News source failed for ${symbol}`, { url, error: (err as Error).message });
+      log.warn(`News source failed for ${symbol}`, { url: source.url, error: (err as Error).message });
     }
   }
 
   return Array.from(headlines).slice(0, 8);
+}
+
+export async function analyzeSentimentHybrid(
+  headlines: string[],
+  symbol: string
+): Promise<EnhancedSentimentResult> {
+  if (headlines.length === 0) {
+    return convertKeywordSentiment(classifySentiment(headlines));
+  }
+
+  const analystNote = extractAnalystNote(headlines);
+  const earningsExcerpt = await buildEarningsExcerpt(symbol);
+
+  try {
+    return await analyzeSentimentWithLLM(headlines, symbol, analystNote, earningsExcerpt);
+  } catch (err) {
+    log.warn(`LLM sentiment failed for ${symbol}, falling back to keyword sentiment`, {
+      error: (err as Error).message,
+    });
+    return convertKeywordSentiment(classifySentiment(headlines));
+  }
 }

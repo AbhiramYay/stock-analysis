@@ -49,42 +49,45 @@ function enrichHoldings(raw: KiteHolding[]): { holdings: Holding[]; totalValue: 
 
 // ─── LangChain Tool Definition ────────────────────────────────────────────────
 
-export const getHoldingsTool = new DynamicStructuredTool({
+const getHoldingsToolSchema: any = z.object({});
+const getHoldingsToolFunc: any = async (): Promise<string> => {
+  log.info("Tool invoked: getHoldings");
+
+  try {
+    const rawHoldings = await fetchHoldings();
+    const { holdings, totalValue } = enrichHoldings(rawHoldings);
+
+    const totalPnL = holdings.reduce((sum, h) => sum + h.pnl, 0);
+
+    const output: GetHoldingsOutput = {
+      holdings,
+      totalValue,
+      totalPnL,
+    };
+
+    log.info("Holdings fetched", {
+      count: holdings.length,
+      totalValue: `₹${totalValue.toFixed(2)}`,
+      totalPnL: `₹${totalPnL.toFixed(2)}`,
+    });
+
+    return JSON.stringify(output, null, 2);
+  } catch (err) {
+    const msg = `getHoldings failed: ${(err as Error).message}`;
+    log.error(msg);
+    return JSON.stringify({ error: msg });
+  }
+};
+
+export const getHoldingsTool: any = new (DynamicStructuredTool as any)({
   name: "getHoldings",
   description:
     "Fetch the current equity portfolio holdings from Zerodha Kite Connect. " +
     "Returns each stock's symbol, quantity, average buy price, current market price, " +
     "current value, unrealised PnL, and its percentage weight in the total portfolio. " +
     "Call this first before any rebalancing calculation.",
-  schema: z.object({}), // No inputs required
-  func: async (): Promise<string> => {
-    log.info("Tool invoked: getHoldings");
-
-    try {
-      const rawHoldings = await fetchHoldings();
-      const { holdings, totalValue } = enrichHoldings(rawHoldings);
-
-      const totalPnL = holdings.reduce((sum, h) => sum + h.pnl, 0);
-
-      const output: GetHoldingsOutput = {
-        holdings,
-        totalValue,
-        totalPnL,
-      };
-
-      log.info("Holdings fetched", {
-        count: holdings.length,
-        totalValue: `₹${totalValue.toFixed(2)}`,
-        totalPnL: `₹${totalPnL.toFixed(2)}`,
-      });
-
-      return JSON.stringify(output, null, 2);
-    } catch (err) {
-      const msg = `getHoldings failed: ${(err as Error).message}`;
-      log.error(msg);
-      return JSON.stringify({ error: msg });
-    }
-  },
+  schema: getHoldingsToolSchema,
+  func: getHoldingsToolFunc,
 });
 
 // ─── Exported helper (for agent to call directly without LangChain) ───────────

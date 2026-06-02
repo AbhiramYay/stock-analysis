@@ -20,6 +20,7 @@
     "dev:web": "(cd web && npm install --no-audit --no-fund) && (cd web && npm run dev)",
     "build:web": "cd web && npm run build",
     "build:all": "npm run build && npm run build:web",
+    "typecheck": "node --max-old-space-size=8192 ./node_modules/typescript/lib/tsc.js --project tsconfig.json --noEmit --skipLibCheck",
     "start:server": "node dist/server.js",
     "auth": "ts-node --transpile-only src/auth.ts",
     "clean": "rm -rf dist"

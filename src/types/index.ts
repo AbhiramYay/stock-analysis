@@ -129,6 +129,34 @@ export type RiskAction =
   | "CONSIDER INCREASE"
   | "INCREASE";
 
+export type AspectRating = "positive" | "neutral" | "negative";
+export interface SentimentAspects {
+  earnings: AspectRating;
+  guidance: AspectRating;
+  management: AspectRating;
+  macro: AspectRating;
+}
+
+export interface SentimentRecommendation {
+  action: "buy" | "hold" | "sell";
+  conviction: number;
+}
+
+export interface EnhancedSentimentResult {
+  score: -1 | 0 | 1;
+  overallSentiment: -1 | 0 | 1;
+  label: SentimentLabel;
+  confidence: number;
+  themes: string[];
+  keyFindings: string[];
+  aspects: SentimentAspects;
+  recommendation: SentimentRecommendation;
+  reasoning: string;
+  analystSignals: string[];
+  key_phrases?: string[];
+  method: "llm" | "keyword";
+}
+
 export interface StockRiskMetrics {
   symbol: string;
   sector: string;
@@ -141,7 +169,15 @@ export interface StockRiskMetrics {
   recentHeadlines: string[];
   sentimentScore: -1 | 0 | 1;
   sentimentLabel: SentimentLabel;
+  sentimentConfidence: number;
+  sentimentThemes: string[];
+  sentimentAspects: SentimentAspects;
+  sentimentMethod: "llm" | "keyword";
   sentimentReasoning: string;
+  sentimentRecommendation: SentimentRecommendation;
+  sentimentRecommendationConviction: number;
+  riskOverlayNote: string;
+  riskReviewRequired: boolean;
   hiddenRiskFlags: string[];
   recommendedAction: RiskAction;
 }
@@ -170,17 +206,26 @@ export interface StockRecommendation {
   sector: string;
   rank: number;
   compositeScore: number;
+  alphaScore: number;
   fundamentalScore: number;
   sentimentScore: number;
   momentumScore: number;
   sixMonthReturnPct: number | null;
+  riskScore: number;
   fundamentals: StockFundamentals;
   sentimentLabel: SentimentLabel;
+  sentimentConfidence: number;
+  sentimentThemes: string[];
+  sentimentAspects: SentimentAspects;
+  sentimentMethod: "llm" | "keyword";
+  sentimentRecommendation: SentimentRecommendation;
+  sentimentRecommendationConviction: number;
   recentHeadlines: string[];
   analystSignals: string[];
   fundamentalReasoning: string;
   sentimentReasoning: string;
   combinedReasoning: string;
+  alphaReasoning: string;
 }
 
 export interface StockRecommendationReport {
