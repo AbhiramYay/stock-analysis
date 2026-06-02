@@ -3,12 +3,16 @@
 //  Portfolio risk and sentiment analysis for holdings
 // ─────────────────────────────────────────────────────────────────────────────
 
-import axios from "axios";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { subDays, format } from "date-fns";
 import { getHoldingsRaw } from "./getHoldings";
 import { fetchHistoricalPrices, fetchYahooSector } from "../utils/kiteClient";
+import {
+  classifySentiment,
+  fetchNewsHeadlines,
+  normalizeSymbol,
+} from "../utils/newsSentiment";
 import { scopedLogger } from "../utils/logger";
 import type {
   Holding,
@@ -60,90 +64,15 @@ const SECTOR_MAP: Record<string, string> = {
   BAJAJFINSV: "Financials",
   HINDALCO: "Materials",
   COALINDIA: "Materials",
-  TATAMOTORS: "Consumer Discretionary",
+  TATM: "Consumer Discretionary",
   TATAMTRDVR: "Consumer Discretionary",
   AXISBANK: "Financials",
   ICICIGI: "Financials",
   MRF: "Consumer Discretionary",
 };
 
-const POSITIVE_WORDS = [
-  "beat",
-  "beats",
-  "upgrade",
-  "upgraded",
-  "strong",
-  "buoyant",
-  "gain",
-  "gains",
-  "rally",
-  "profit",
-  "profits",
-  "growth",
-  "optimistic",
-  "outperform",
-  "outperforms",
-  "record",
-  "surge",
-  "upside",
-  "positive",
-  "bullish",
-  "rebound",
-  "shock"
-];
-
-const NEGATIVE_WORDS = [
-  "miss",
-  "misses",
-  "downgrade",
-  "downgraded",
-  "weak",
-  "fall",
-  "falls",
-  "loss",
-  "losses",
-  "cut",
-  "cuts",
-  "sell",
-  "selloff",
-  "decline",
-  "declines",
-  "concern",
-  "concerns",
-  "probe",
-  "issue",
-  "issues",
-  "slowdown",
-  "warning",
-  "negative",
-  "bearish",
-  "risk",
-  "risks",
-  "volatile",
-  "volatility",
-  "uncertain",
-  "concern"
-];
-
-const YAHOO_RSS = (symbol: string) =>
-  `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=IN&lang=en-IN`;
-const GOOGLE_RSS = (symbol: string) =>
-  `https://news.google.com/rss/search?q=${encodeURIComponent(symbol + " stock india")}&hl=en-IN&gl=IN&ceid=IN:en`;
-
-function normalizeSymbol(symbol: string): string {
-  return symbol.trim().toUpperCase();
-}
-
 function getSector(symbol: string): string {
   return SECTOR_MAP[normalizeSymbol(symbol)] ?? "Unknown";
-}
-
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
 }
 
 const resolvedSectorCache = new Map<string, string>();
@@ -163,89 +92,6 @@ async function resolveSector(symbol: string, exchange: string): Promise<string> 
   const sector = yahooSector ?? staticSector;
   resolvedSectorCache.set(key, sector);
   return sector;
-}
-
-function scoreHeadlineSentiment(title: string): number {
-  const tokens = tokenize(title);
-  let score = 0;
-  for (const token of tokens) {
-    if (POSITIVE_WORDS.includes(token)) score += 1;
-    if (NEGATIVE_WORDS.includes(token)) score -= 1;
-  }
-  return score;
-}
-
-function classifySentiment(headlines: string[]): {
-  score: number;
-  label: SentimentLabel;
-  reasoning: string;
-} {
-  if (headlines.length === 0) {
-    return {
-      score: 0,
-      label: "neutral",
-      reasoning: "No recent headlines were available for sentiment classification.",
-    };
-  }
-
-  const scores = headlines.map((headline) => scoreHeadlineSentiment(headline));
-  const total = scores.reduce((sum, value) => sum + value, 0);
-  const average = total / headlines.length;
-
-  const positiveCount = scores.filter((value) => value > 0).length;
-  const negativeCount = scores.filter((value) => value < 0).length;
-  const neutralCount = scores.filter((value) => value === 0).length;
-
-  const label: SentimentLabel = average >= 0.25
-    ? "positive"
-    : average <= -0.25
-    ? "negative"
-    : "neutral";
-
-  const reasoning = `Analysed ${headlines.length} headlines: ${positiveCount} positive, ${negativeCount} negative, ${neutralCount} neutral. ` +
-    `Overall sentiment is ${label} (avg score ${average.toFixed(2)}).`;
-
-  return {
-    score: label === "positive" ? 1 : label === "negative" ? -1 : 0,
-    label,
-    reasoning,
-  };
-}
-
-function parseRssTitles(xml: string): string[] {
-  const titles: string[] = [];
-  const titleRegex = /<title>(.*?)<\/title>/gi;
-  let match: RegExpExecArray | null;
-
-  while ((match = titleRegex.exec(xml)) !== null) {
-    const title = match[1].trim();
-    if (title && !title.toLowerCase().includes("yahoo finance") && !title.toLowerCase().includes("google news")) {
-      titles.push(title);
-    }
-  }
-
-  return titles;
-}
-
-async function fetchNewsHeadlines(symbol: string): Promise<string[]> {
-  const normalized = normalizeSymbol(symbol);
-  const urls = [YAHOO_RSS(`${normalized}.NS`), GOOGLE_RSS(normalized)];
-  const headlines = new Set<string>();
-
-  for (const url of urls) {
-    try {
-      const response = await axios.get<string>(url, {
-        timeout: 9000,
-        headers: { Accept: "application/rss+xml, application/xml, text/xml" },
-      });
-      const items = parseRssTitles(response.data);
-      items.slice(0, 6).forEach((title) => headlines.add(title));
-    } catch (err) {
-      log.warn(`News source failed for ${symbol}`, { url, error: (err as Error).message });
-    }
-  }
-
-  return Array.from(headlines).slice(0, 6);
 }
 
 function calculateDailyReturns(candles: Array<{ date: Date; close: number }>): { dates: string[]; returns: number[] } {

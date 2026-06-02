@@ -21,6 +21,7 @@ import type {
   OrderParams,
 } from "../types/index";
 import { scopedLogger } from "./logger";
+import { fetchQuoteSummary, YAHOO_USER_AGENT, yahooTicker } from "./yahooClient";
 
 const log = scopedLogger("KiteClient");
 
@@ -154,11 +155,6 @@ async function throttledGet<T>(
 
 // ─── API Wrappers ─────────────────────────────────────────────────────────────
 
-function yahooTicker(symbol: string, exchange: string): string {
-  const suffix = exchange === "BSE" ? "BO" : "NS";
-  return `${symbol}.${suffix}`;
-}
-
 function normalizeSymbol(symbol: string): string {
   return symbol.trim().toUpperCase();
 }
@@ -184,7 +180,7 @@ async function fetchHistoricalPricesViaYahoo(
       },
       timeout: 12000,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "User-Agent": YAHOO_USER_AGENT,
       },
     });
 
@@ -227,20 +223,11 @@ export async function fetchYahooSector(
   if (yahooSectorCache.has(cacheKey)) return yahooSectorCache.get(cacheKey);
 
   const ticker = yahooTicker(symbol, exchange);
-  const apiUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}`;
 
   try {
-    const response = await axios.get(apiUrl, {
-      params: { modules: "assetProfile" },
-      timeout: 12000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        Accept: "application/json",
-      },
-    });
-
-    const result = response.data?.quoteSummary?.result?.[0];
-    const sector = result?.assetProfile?.sector;
+    const result = await fetchQuoteSummary(ticker, "assetProfile");
+    const profile = result?.assetProfile as { sector?: string } | undefined;
+    const sector = profile?.sector;
     if (typeof sector === "string" && sector.trim().length > 0) {
       yahooSectorCache.set(cacheKey, sector);
       return sector;
@@ -251,7 +238,7 @@ export async function fetchYahooSector(
       const profileUrl = `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/profile`;
       const htmlRes = await axios.get(profileUrl, {
         timeout: 12000,
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        headers: { "User-Agent": YAHOO_USER_AGENT },
       });
       const html = htmlRes.data as string;
       const match = html.match(/Sector\s*<\/span>\s*<span[^>]*>([^<]+)<\/span>/i) || html.match(/Sector\(s\):\s*<span[^>]*>([^<]+)<\/span>/i);

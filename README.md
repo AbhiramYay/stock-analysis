@@ -1,31 +1,52 @@
 # 🏦 Zerodha Portfolio Rebalancing Agent
 
-A production-ready TypeScript agent that uses **LangChain.js** and **Zerodha Kite Connect API** to analyse your equity portfolio, generate rebalancing trade suggestions, and optionally execute them — all from the command line.
+A production-ready TypeScript agent that uses **LangChain.js** and **Zerodha Kite Connect** to analyse your Indian equity portfolio: rebalancing, monthly PnL, risk/sentiment, and **NSE stock buy recommendations** — from the **CLI**, a **REST API**, or a **React dashboard**.
+
+---
+
+## Features
+
+| Feature | CLI | API | Web UI |
+|---------|-----|-----|--------|
+| Live holdings & weights | `holdings` | `GET /api/holdings` | `/` |
+| Monthly PnL + portfolio summary | `pnl` | `POST /api/pnl` | `/pnl` |
+| Risk, beta, volatility, news sentiment | `analysis` | `GET /api/risk` | `/risk` |
+| NSE buy recommendations (fundamentals + sentiment) | `recommend` | `GET /api/recommend` | `/recommend` |
+| Rebalance plan & execute | `rebalance` | `POST /api/rebalance` | `/rebalance` |
+| Natural-language agent | `query` | `POST /api/query` | — |
 
 ---
 
 ## Architecture
 
 ```
-zerodha-rebalancer/
+stock-analysis/
 ├── src/
 │   ├── agents/
-│   │   └── rebalancingAgent.ts   # LangChain ReAct agent + rebalance/PnL orchestrators
-│   ├── tools/                    # Kite API calls wrapped as LangChain MCP tools
-│   │   ├── getHoldings.ts        # Fetch & enrich current portfolio
-│   │   ├── getHistoricalPrice.ts # OHLCV data for any symbol/date
-│   │   ├── rebalancePortfolio.ts # Weight diff → trade suggestions
-│   │   ├── riskSentiment.ts      # Risk, volatility, beta, correlation, and news sentiment analysis
-│   │   └── placeOrder.ts         # Execute BUY/SELL orders
+│   │   └── rebalancingAgent.ts   # LangChain ReAct agent + command orchestrators
+│   ├── tools/                    # LangChain DynamicStructuredTool wrappers
+│   │   ├── getHoldings.ts
+│   │   ├── getHistoricalPrice.ts
+│   │   ├── rebalancePortfolio.ts
+│   │   ├── riskSentiment.ts      # Volatility, beta, correlation, news sentiment
+│   │   ├── stockRecommendation.ts # Nifty 50 scan: fundamentals + sentiment + diversification
+│   │   └── placeOrder.ts
+│   ├── data/
+│   │   └── nifty50.ts            # NSE large-cap universe for recommendations
 │   ├── utils/
-│   │   ├── kiteClient.ts         # Singleton KiteConnect client + API wrappers
-│   │   ├── pnl.ts                # calculateMonthlyPnL + formatters
-│   │   ├── display.ts            # Rich terminal tables (chalk + table)
-│   │   └── logger.ts             # Winston structured logger
-│   ├── types/
-│   │   └── index.ts              # All TypeScript interfaces & types
-│   └── cli.ts                    # Commander.js CLI entry point
-├── .env.example
+│   │   ├── kiteClient.ts         # Kite + Yahoo Finance (prices, sectors)
+│   │   ├── yahooFundamentals.ts  # ROE, debt/equity, earnings growth
+│   │   ├── newsSentiment.ts      # RSS headlines + analyst-tone scoring
+│   │   ├── pnl.ts
+│   │   ├── display.ts
+│   │   └── logger.ts
+│   ├── types/index.ts
+│   ├── cli.ts
+│   └── server.ts                 # Express API + serves web/dist
+├── web/                          # React + Vite + Bootstrap 5 dashboard
+│   └── src/
+│       ├── components/Holdings.tsx
+│       └── pages/ PnL · Risk · Recommend · Rebalance
 ├── package.json
 └── tsconfig.json
 ```
@@ -38,7 +59,7 @@ zerodha-rebalancer/
 |-------------|-------|
 | Node.js ≥ 18 | [nodejs.org](https://nodejs.org) |
 | Zerodha account | Regular login at [kite.zerodha.com](https://kite.zerodha.com) — no API subscription needed |
-| OpenAI API key (or Anthropic) | For the LLM agent — [platform.openai.com](https://platform.openai.com) |
+| LLM API key (Gemini recommended) | Only for `query` / ReAct agent — free tier available (see below) |
 
 ---
 
@@ -48,8 +69,9 @@ zerodha-rebalancer/
 
 ```bash
 git clone <repo>
-cd zerodha-rebalancer
+cd stock-analysis
 npm install
+cd web && npm install && cd ..
 ```
 
 ### 2. Configure environment
@@ -70,6 +92,9 @@ GOOGLE_API_KEY=AIza...
 
 # Optional: set to "true" to auto-execute trades without --execute flag
 AUTO_EXECUTE_TRADES=false
+
+# Optional: required for POST /api/rebalance/execute from the web UI
+ADMIN_API_TOKEN=your_secret_token
 ```
 
 ### 3. Get your Kite enctoken
@@ -108,6 +133,44 @@ npm run build
 > - **IDE / editor** (VS Code, WebStorm, etc.) uses it for type-checking, IntelliSense, and error highlighting.
 >
 > Do **not** delete `tsconfig.json`.
+
+### 5. Web dashboard (optional)
+
+Run the API server and Vite dev UI in two terminals:
+
+```bash
+# Terminal 1 — API on http://localhost:3000
+npm run dev:server
+
+# Terminal 2 — React UI on http://localhost:5173 (proxies /api → :3000)
+npm run dev:web
+```
+
+Open **http://localhost:5173**. Pages: **Holdings**, **PnL**, **Risk**, **Recommend**, **Rebalance**.
+
+The UI uses **Bootstrap 5** (navbar, cards, tables, alerts, badges, forms). All data tables support **click-to-sort** on column headers (⇅ / ↑ / ↓). PnL defaults to highest return %; Recommend shows per-stock reasoning and sector allocation cards.
+
+For a single production-style deploy, build both and start the server (it serves `web/dist`):
+
+```bash
+npm run build:all
+npm run start:server
+```
+
+---
+
+## REST API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/holdings` | Current portfolio |
+| `POST` | `/api/pnl` | Body: `{ "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" }` (optional) |
+| `GET` | `/api/risk?lookback=90` | Risk & sentiment report |
+| `GET` | `/api/recommend?top=8&includeHoldings=true` | Stock buy recommendations (slow; ~several min) |
+| `POST` | `/api/rebalance` | Body: `{ "targetWeightsStr": "INFY:30,TCS:40,HDFC:30" }` |
+| `POST` | `/api/rebalance/execute` | Same body + `Authorization: Bearer <ADMIN_API_TOKEN>` |
+| `POST` | `/api/query` | Body: `{ "prompt": "..." }` |
 
 ---
 
@@ -163,7 +226,51 @@ npm run dev -- rebalance --weights "INFY:30,TCS:40,HDFC:30" --drift 5
 ### `pnl` — Monthly gains/losses
 
 ```bash
+# Last calendar month (default)
 npm run dev -- pnl
+
+# Custom date range
+npm run dev -- pnl --from 2026-04-01 --to 2026-04-30
+```
+
+Computes per-stock open/close PnL, a **portfolio summary** (total PnL, PnL %, holding value, best/worst performer), and a sortable breakdown. The web **PnL** page shows the same summary in a card plus a chart and table (default sort: highest **PnL %**).
+
+---
+
+### `recommend` — NSE stock buy recommendations
+
+Scans the **Nifty 50** universe (plus your holdings, unless `--nifty-only`), scores each stock on fundamentals, news/analyst sentiment, and 6-month momentum, then returns **5–10 diversified picks** with reasoning and sector allocation.
+
+```bash
+# Top 8 recommendations (default)
+npm run dev -- recommend
+
+# Top 10, Nifty 50 only
+npm run dev -- recommend --top 10 --nifty-only
+```
+
+**Data sources:** Yahoo Finance (ROE, debt/equity, earnings growth, P/E, prices), Yahoo/Google News RSS (headlines and brokerage/analyst tone).
+
+> ⏱ Full scan takes **several minutes** (rate-limited API calls per symbol).  
+> ⚠️ **Not financial advice** — verify data before investing.
+
+**Sample output:**
+
+```
+📊 NSE Stock Buy Recommendations (India)
+
+  Scanned 50 symbols · 18 passed filters
+
+┌───┬──────────┬─────────────────────────┬───────┬───────┬───────┬───────┬──────────┐
+│ # │ Symbol   │ Sector                  │ Score │ Fund. │ Sent. │ Mom.  │ Sentiment│
+├───┼──────────┼─────────────────────────┼───────┼───────┼───────┼───────┼──────────┤
+│ 1 │ RELIANCE │ Energy                  │ 78.0  │ 32    │ 28    │ 18    │ positive │
+└───┴──────────┴─────────────────────────┴───────┴───────┴───────┴───────┴──────────┘
+
+  Sector allocation (recommended basket):
+    Energy                       25.0%
+    Information Technology       25.0%
+    ...
 ```
 
 ---
@@ -178,11 +285,11 @@ npm run dev -- analysis
 npm run dev -- analysis --lookback 120
 ```
 
-This command analyses your holdings for volatility, beta, sector concentration, and recent news sentiment, then recommends whether to hold, reduce, or consider increasing exposure.
+This command analyses your holdings for volatility, beta, sector concentration, and recent news sentiment, then recommends whether to hold, reduce, or consider increasing exposure. The web **Risk** page adds sector and volatility charts plus a sortable table.
 
 ---
 
-**Sample Output:**
+### `pnl` sample output
 
 ```
 📈 Monthly PnL Report  (1 Apr 2025 → 30 Apr 2025)
@@ -222,7 +329,10 @@ npm run dev -- query "rebalance portfolio with target weights INFY 30%, TCS 40%,
 npm run dev -- query "show last month's gains and losses"
 npm run dev -- query "what percentage of my portfolio is in TCS?"
 npm run dev -- query "compare my current weights against INFY 25%, TCS 35%, HDFC 25%, WIPRO 15%"
+npm run dev -- query "give me top NSE stock buy recommendations with sector diversification"
 ```
+
+The ReAct agent can call **`stockRecommendation`**, **`riskSentiment`**, **`getHoldings`**, **`rebalancePortfolio`**, and **`placeOrder`** as needed.
 
 ---
 
@@ -252,20 +362,34 @@ interface TradeSuggestion {
 }
 
 type TargetWeights = Record<string, number>;  // { "INFY": 30, "TCS": 40 }
+
+interface StockRecommendation {
+  symbol: string;
+  sector: string;
+  rank: number;
+  compositeScore: number;
+  fundamentalScore: number;
+  sentimentScore: number;
+  fundamentalReasoning: string;
+  sentimentReasoning: string;
+  sentimentLabel: "positive" | "neutral" | "negative";
+  fundamentals: { roe: number | null; debtToEquity: number | null; earningsGrowth: number | null };
+}
 ```
 
 ---
 
-## MCP Tools
+## LangChain Tools
 
-The four LangChain tools wrap Kite API calls:
+Six tools are registered on the ReAct agent (README historically called these “MCP tools”; they are standard LangChain `DynamicStructuredTool` instances):
 
 | Tool | Input | What it does |
 |------|-------|--------------|
 | `getHoldings` | — | Fetch live portfolio, compute weights |
 | `getHistoricalPrice` | symbol, date, exchange | OHLCV data for any date |
 | `rebalancePortfolio` | targetWeights, driftThreshold | Compute BUY/SELL suggestions |
-| `riskSentiment` | lookbackDays | Compute volatility, beta, sector correlation, and sentiment-based adjustments |
+| `riskSentiment` | lookbackDays | Volatility, beta, correlation, news sentiment for **your holdings** |
+| `stockRecommendation` | topN, includeHoldings | Rank **NSE** buy ideas (Nifty 50 + fundamentals + sentiment + diversification) |
 | `placeOrder` | symbol, type, qty, price | Execute a real order |
 
 ---
@@ -367,6 +491,7 @@ GROQ_MODEL=llama-3.3-70b-versatile   # default, can omit
 | `OPENAI_API_KEY` | — | OpenAI key (paid) |
 | `ANTHROPIC_API_KEY` | — | Anthropic key (paid) |
 | `AUTO_EXECUTE_TRADES` | `false` | Set `true` to skip `--execute` flag |
+| `ADMIN_API_TOKEN` | — | Bearer token for `POST /api/rebalance/execute` |
 | `ORDER_VARIETY` | `regular` | `regular`, `amo`, `co`, `iceberg` |
 | `ORDER_EXCHANGE` | `NSE` | `NSE` or `BSE` |
 | `ORDER_PRODUCT` | `CNC` | `CNC` (delivery) or `MIS` (intraday) |
@@ -380,21 +505,48 @@ GROQ_MODEL=llama-3.3-70b-versatile   # default, can omit
 - **CNC product**: orders default to delivery (not intraday), protecting against same-day reversals.
 - **Drift threshold**: trades are only suggested when weight deviation exceeds 2% (configurable via `--drift`).
 - **Sell-first ordering**: the plan always schedules SELL orders before BUY orders to free up cash.
+- **Recommendations are research output only**: scores use public Yahoo/Google data; they are not brokerage research or investment advice.
 
 ---
 
 ## Development
 
 ```bash
-# Run directly with ts-node (no build needed)
+# CLI (ts-node, no build required)
 npm run dev -- rebalance --weights "INFY:30,TCS:40,HDFC:30"
+npm run dev -- pnl
+npm run dev -- analysis
+npm run dev -- recommend --top 8
+npm run dev -- holdings
 
-# With debug logging
+# Shortcut scripts
+npm run dev:rebalance
+npm run dev:pnl
+npm run dev:holdings
+npm run dev:recommend
+
+# API + web UI
+npm run dev:server
+npm run dev:web
+
+# Debug logging
 LOG_LEVEL=debug npm run dev -- pnl
 
-# Build to dist/
-npm run build
-
-# Run compiled version
-npm start -- holdings
+# Production build
+npm run build          # backend → dist/
+npm run build:web      # frontend → web/dist/
+npm run build:all      # both
+npm run start:server   # node dist/server.js (serves API + web/dist)
+npm start -- holdings  # compiled CLI
 ```
+
+### npm scripts reference
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Run CLI via ts-node (`npm run dev -- <command>`) |
+| `npm run dev:server` | Express API on port 3000 |
+| `npm run dev:web` | Vite React app on port 5173 |
+| `npm run build` / `build:web` / `build:all` | Compile backend and/or frontend |
+| `npm run start:server` | Run compiled server |
+| `npm run auth` | Interactive Kite enctoken setup |

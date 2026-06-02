@@ -155,6 +155,45 @@ export interface PortfolioRiskSentimentReport {
   generatedAt: Date;
 }
 
+// ─── Stock Recommendation Types ───────────────────────────────────────────────
+
+export interface StockFundamentals {
+  roe: number | null;
+  debtToEquity: number | null;
+  earningsGrowth: number | null;
+  peRatio: number | null;
+}
+
+export interface StockRecommendation {
+  symbol: string;
+  exchange: string;
+  sector: string;
+  rank: number;
+  compositeScore: number;
+  fundamentalScore: number;
+  sentimentScore: number;
+  momentumScore: number;
+  sixMonthReturnPct: number | null;
+  fundamentals: StockFundamentals;
+  sentimentLabel: SentimentLabel;
+  recentHeadlines: string[];
+  analystSignals: string[];
+  fundamentalReasoning: string;
+  sentimentReasoning: string;
+  combinedReasoning: string;
+}
+
+export interface StockRecommendationReport {
+  recommendations: StockRecommendation[];
+  /** Sector weights across the recommended basket (sums to ~100). */
+  sectorAllocation: Record<string, number>;
+  universeScanned: number;
+  candidatesPassed: number;
+  dataSources: string[];
+  methodology: string;
+  generatedAt: Date;
+}
+
 // ─── Order Types ──────────────────────────────────────────────────────────────
 
 export type OrderVariety = "regular" | "amo" | "co" | "iceberg";
@@ -202,12 +241,13 @@ export interface RebalanceInput {
 /** Agent execution result */
 export interface AgentResult {
   success: boolean;
-  command: "rebalance" | "pnl" | "analysis";
+  command: "rebalance" | "pnl" | "analysis" | "recommend";
   portfolio?: Portfolio;
   plan?: RebalancingPlan;
   placedOrders?: PlacedOrder[];
   pnlReport?: MonthlyPnLReport;
   riskReport?: PortfolioRiskSentimentReport;
+  recommendationReport?: StockRecommendationReport;
   error?: string;
   executionTimeMs: number;
 }

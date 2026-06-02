@@ -13,6 +13,7 @@ import {
   runPnLCommand,
   runAgentQuery,
   runRiskSentimentCommand,
+  runStockRecommendationCommand,
   parseTargetWeights,
 } from "./agents/rebalancingAgent";
 import { displayResult } from "./utils/display";
@@ -132,6 +133,33 @@ program
       }
 
       const result = await runRiskSentimentCommand(lookbackDays);
+      displayResult(result);
+      if (!result.success) process.exit(1);
+    } catch (err) {
+      console.error(chalk.red(`\n❌ Error: ${(err as Error).message}\n`));
+      logger.debug("CLI error", { stack: (err as Error).stack });
+      process.exit(1);
+    }
+  });
+
+// ─── Command: recommend ───────────────────────────────────────────────────────
+//
+program
+  .command("recommend")
+  .description(
+    "Rank NSE buy ideas using fundamentals, news/analyst sentiment, and sector diversification"
+  )
+  .option("-n, --top <count>", "Number of recommendations (5–10, default 8)", "8")
+  .option("--nifty-only", "Scan only Nifty 50 universe, exclude portfolio symbols")
+  .action(async (opts: { top: string; niftyOnly?: boolean }) => {
+    try {
+      const topN = parseInt(opts.top, 10);
+      if (Number.isNaN(topN) || topN < 5 || topN > 10) {
+        console.error(chalk.red("--top must be an integer between 5 and 10"));
+        process.exit(1);
+      }
+
+      const result = await runStockRecommendationCommand(topN, !opts.niftyOnly);
       displayResult(result);
       if (!result.success) process.exit(1);
     } catch (err) {

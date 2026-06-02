@@ -1,0 +1,53 @@
+/* App overrides on top of Bootstrap */
+
+:root {
+  --app-primary: #0d6efd;
+  --bs-body-bg: #f4f6f9;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.app-shell {
+  background-color: var(--bs-body-bg);
+}
+
+.navbar-brand .bi {
+  font-size: 1.25rem;
+}
+
+.table-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.table-sortable:hover {
+  background-color: rgba(13, 110, 253, 0.08) !important;
+}
+
+.sort-indicator {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.stat-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08) !important;
+}
+
+.chart-card .card-body {
+  min-height: 280px;
+}
+
+pre.json-result {
+  font-size: 0.8125rem;
+  max-height: 400px;
+  overflow: auto;
+}

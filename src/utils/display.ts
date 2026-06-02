@@ -14,6 +14,7 @@ import type {
   PlacedOrder,
   PortfolioRiskSentimentReport,
   RebalancingPlan,
+  StockRecommendationReport,
 } from "../types/index";
 
 // ─── Shared Formatters ────────────────────────────────────────────────────────
@@ -273,6 +274,69 @@ export function printRiskSentimentReport(report: PortfolioRiskSentimentReport): 
   console.log();
 }
 
+// ─── Stock Recommendation Report ─────────────────────────────────────────────
+
+export function printStockRecommendationReport(report: StockRecommendationReport): void {
+  console.log(chalk.bold.cyan("\n📊 NSE Stock Buy Recommendations (India)\n"));
+  console.log(chalk.grey(`  Scanned ${report.universeScanned} symbols · ${report.candidatesPassed} passed filters\n`));
+
+  const headers = [
+    chalk.bold("#"),
+    chalk.bold("Symbol"),
+    chalk.bold("Sector"),
+    chalk.bold("Score"),
+    chalk.bold("Fund."),
+    chalk.bold("Sent."),
+    chalk.bold("Mom."),
+    chalk.bold("Sentiment"),
+  ];
+
+  const rows = report.recommendations.map((r) => [
+    String(r.rank),
+    chalk.white(r.symbol),
+    chalk.white(r.sector),
+    r.compositeScore.toFixed(1),
+    String(r.fundamentalScore),
+    String(r.sentimentScore),
+    String(r.momentumScore),
+    r.sentimentLabel === "positive"
+      ? chalk.green(r.sentimentLabel)
+      : r.sentimentLabel === "negative"
+      ? chalk.red(r.sentimentLabel)
+      : chalk.grey(r.sentimentLabel),
+  ]);
+
+  console.log(table([headers, ...rows], { columns: { 3: { alignment: "right" }, 4: { alignment: "right" }, 5: { alignment: "right" }, 6: { alignment: "right" } } }));
+
+  console.log(chalk.bold("\n  Reasoning (fundamental + sentiment):"));
+  report.recommendations.forEach((r) => {
+    console.log(chalk.bold.white(`\n    ${r.rank}. ${r.symbol} (${r.sector}) — score ${r.compositeScore}`));
+    console.log(`       Fundamentals: ${chalk.grey(r.fundamentalReasoning)}`);
+    console.log(`       Sentiment:    ${chalk.grey(r.sentimentReasoning)}`);
+    if (r.analystSignals.length > 0) {
+      console.log(`       Analyst/news: ${chalk.dim(r.analystSignals.slice(0, 2).join(" | "))}`);
+    }
+    const f = r.fundamentals;
+    const metrics = [
+      f.roe !== null ? `ROE ${f.roe.toFixed(1)}%` : null,
+      f.earningsGrowth !== null ? `growth ${f.earningsGrowth.toFixed(1)}%` : null,
+      f.debtToEquity !== null ? `D/E ${f.debtToEquity.toFixed(2)}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (metrics) console.log(`       Metrics:      ${chalk.dim(metrics)}`);
+  });
+
+  console.log(chalk.bold("\n  Sector allocation (recommended basket):"));
+  for (const [sector, pct] of Object.entries(report.sectorAllocation).sort((a, b) => b[1] - a[1])) {
+    console.log(`    ${sector.padEnd(28)} ${pct.toFixed(1)}%`);
+  }
+
+  console.log(chalk.bold("\n  Data sources:"));
+  report.dataSources.forEach((s) => console.log(`    • ${chalk.dim(s)}`));
+  console.log(chalk.dim(`\n  ${report.methodology}\n`));
+}
+
 // ─── Order Results ────────────────────────────────────────────────────────────
 
 export function printOrderResults(orders: PlacedOrder[]): void {
@@ -316,6 +380,10 @@ export function displayResult(result: AgentResult): void {
 
   if (result.pnlReport) {
     printPnLReport(result.pnlReport);
+  }
+
+  if (result.recommendationReport) {
+    printStockRecommendationReport(result.recommendationReport);
   }
 
   if (result.placedOrders) {

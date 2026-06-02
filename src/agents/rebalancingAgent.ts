@@ -20,6 +20,10 @@ import {
   riskSentimentTool,
   analyzePortfolioRiskSentiment,
 } from "../tools/riskSentiment";
+import {
+  stockRecommendationTool,
+  analyzeStockRecommendations,
+} from "../tools/stockRecommendation";
 import { calculateMonthlyPnL } from "../utils/pnl";
 import { scopedLogger } from "../utils/logger";
 import type {
@@ -127,6 +131,7 @@ Your capabilities:
 - **getHistoricalPrice**: Retrieve OHLCV data for any NSE/BSE stock on a specific date.
 - **rebalancePortfolio**: Analyse current vs target weights and generate precise trade suggestions.
 - **riskSentiment**: Analyse portfolio risk and market sentiment using volatility, beta, correlations and recent headlines.
+- **stockRecommendation**: Rank NSE buy ideas using fundamentals, news/analyst sentiment, and sector diversification.
 - **placeOrder**: Execute BUY or SELL orders on Zerodha (use only when explicitly asked).
 
 Rebalancing Workflow:
@@ -154,6 +159,7 @@ function buildAgent() {
     getHistoricalPriceTool,
     rebalancePortfolioTool,
     riskSentimentTool,
+    stockRecommendationTool,
     placeOrderTool,
   ];
 
@@ -298,6 +304,39 @@ export async function runRiskSentimentCommand(
     return {
       success: false,
       command: "analysis",
+      error,
+      executionTimeMs: Date.now() - start,
+    };
+  }
+}
+
+// ─── Stock Recommendation Command ────────────────────────────────────────────
+
+export async function runStockRecommendationCommand(
+  topN = 8,
+  includeHoldings = true
+): Promise<AgentResult> {
+  const start = Date.now();
+  log.info("Starting stock recommendation command", { topN, includeHoldings });
+
+  try {
+    const recommendationReport = await analyzeStockRecommendations({
+      topN,
+      includeHoldings,
+    });
+
+    return {
+      success: true,
+      command: "recommend",
+      recommendationReport,
+      executionTimeMs: Date.now() - start,
+    };
+  } catch (err) {
+    const error = (err as Error).message;
+    log.error("Stock recommendation command failed", { error });
+    return {
+      success: false,
+      command: "recommend",
       error,
       executionTimeMs: Date.now() - start,
     };
