@@ -53,7 +53,7 @@ export function createLLM(): BaseChatModel {
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set in .env");
     log.info("Using Anthropic Claude (paid)");
     return new ChatAnthropic({
-      model: "claude-opus-4-5",
+      model: "claude-3.5-haiku",
       apiKey,
       maxTokens: 4096,
       temperature: 0,

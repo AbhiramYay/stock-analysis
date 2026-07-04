@@ -10,10 +10,12 @@ import { getHoldingsRaw } from "./getHoldings";
 import { fetchHistoricalPrices, fetchYahooSector } from "../utils/kiteClient";
 import { fetchYahooFundamentals } from "../utils/yahooFundamentals";
 import {
-  analyzeSentimentHybrid,
+  analyzeSentimentHybridBatch,
   fetchNewsHeadlines,
   normalizeSymbol,
+  classifySentiment,
 } from "../utils/newsSentiment";
+import { convertKeywordSentiment } from "../utils/llmSentiment";
 import { scopedLogger } from "../utils/logger";
 import type {
   SentimentLabel,
@@ -284,9 +286,19 @@ export async function analyzeStockRecommendations(
 
   const candidates: StockRecommendation[] = [];
 
+  // First pass: gather data for all symbols (fundamentals, headlines, sector, momentum)
+  const gathered: Array<{
+    symbol: string;
+    exchange: string;
+    fundamentals: any;
+    headlines: string[];
+    sector: string | null;
+    sixMonthReturnPct: number | null;
+  }> = [];
+
   for (let i = 0; i < universe.length; i += 1) {
     const symbol = universe[i];
-    log.debug(`Recommendation scan ${i + 1}/${universe.length}: ${symbol}`);
+    log.debug(`Gathering data ${i + 1}/${universe.length}: ${symbol}`);
 
     const exchange = "NSE";
     const [fundamentals, headlines, sector, sixMonthReturnPct] = await Promise.all([
@@ -296,14 +308,30 @@ export async function analyzeStockRecommendations(
       fetchSixMonthReturn(symbol, exchange),
     ]);
 
-    const sentiment = await analyzeSentimentHybrid(headlines, symbol);
+    gathered.push({ symbol, exchange, fundamentals, headlines, sector: sector ?? null, sixMonthReturnPct });
+    await sleep(throttleMs);
+  }
+
+  // Call LLM once for all symbols using batched sentiment analysis
+  const batchItems = gathered.map((g) => ({ symbol: g.symbol, headlines: g.headlines }));
+  const sentimentMap = await analyzeSentimentHybridBatch(batchItems as any);
+
+  // Second pass: score and filter using batched sentiment results
+  for (const g of gathered) {
+    const symbol = g.symbol;
+    const exchange = g.exchange;
+    const fundamentals = g.fundamentals;
+    const headlines = g.headlines;
+    const sector = g.sector;
+    const sixMonthReturnPct = g.sixMonthReturnPct;
+
+    const sentiment = sentimentMap[symbol] ?? convertKeywordSentiment(classifySentiment(headlines));
     const fund = scoreFundamentals(fundamentals);
     const sent = scoreSentiment(sentiment.label, sentiment.analystSignals, sentiment.confidence);
     const mom = scoreMomentum(sixMonthReturnPct);
     const { riskScore, riskNotes } = deriveRiskScore(fundamentals, sixMonthReturnPct);
 
     if (!passesFilters(fund.score, sentiment.label, fundamentals, sixMonthReturnPct)) {
-      await sleep(throttleMs);
       continue;
     }
 
@@ -341,8 +369,6 @@ export async function analyzeStockRecommendations(
       combinedReasoning: `${fund.reasoning} ${sent.reasoning} ${mom.reasoning}`,
       alphaReasoning,
     });
-
-    await sleep(throttleMs);
   }
 
   const recommendations = diversifyPicks(candidates, topN);

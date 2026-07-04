@@ -1,7 +1,7 @@
 import axios from "axios";
 import { scopedLogger } from "./logger";
 import type { EnhancedSentimentResult, SentimentLabel } from "../types/index";
-import { analyzeSentimentWithLLM, convertKeywordSentiment } from "./llmSentiment";
+import { analyzeSentimentWithLLM, analyzeSentimentWithLLMBatch, convertKeywordSentiment } from "./llmSentiment";
 import { fetchYahooFundamentals } from "./yahooFundamentals";
 
 const log = scopedLogger("newsSentiment");
@@ -287,4 +287,47 @@ export async function analyzeSentimentHybrid(
     });
     return convertKeywordSentiment(classifySentiment(headlines));
   }
+}
+
+export async function analyzeSentimentHybridBatch(
+  items: Array<{ symbol: string; headlines: string[] }>
+): Promise<Record<string, EnhancedSentimentResult>> {
+  const results: Record<string, EnhancedSentimentResult> = {};
+  if (!items || items.length === 0) return results;
+
+  // prepare detailed items for LLM batch
+  const detailed = await Promise.all(
+    items.map(async (it) => {
+      const analystNote = extractAnalystNote(it.headlines);
+      const earningsExcerpt = await buildEarningsExcerpt(it.symbol);
+      return { symbol: it.symbol, headlines: it.headlines, analystNote, earningsExcerpt };
+    })
+  );
+
+  const chunkSize = 6;
+  for (let i = 0; i < detailed.length; i += chunkSize) {
+    const chunk = detailed.slice(i, i + chunkSize);
+    try {
+      const llmResults = await analyzeSentimentWithLLMBatch(chunk);
+      for (const it of chunk) {
+        const sym = it.symbol;
+        if (llmResults[sym]) {
+          results[sym] = llmResults[sym];
+        } else {
+          results[sym] = convertKeywordSentiment(classifySentiment(it.headlines));
+        }
+      }
+    } catch (err) {
+      log.warn(`LLM batch sentiment failed for chunk, falling back to keyword sentiment`, {
+        chunkStart: i,
+        chunkLength: chunk.length,
+        error: (err as Error).message,
+      });
+      for (const it of chunk) {
+        results[it.symbol] = convertKeywordSentiment(classifySentiment(it.headlines));
+      }
+    }
+  }
+
+  return results;
 }

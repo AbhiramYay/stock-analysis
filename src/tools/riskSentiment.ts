@@ -9,9 +9,12 @@ import { getHoldingsRaw } from "./getHoldings";
 import { fetchHistoricalPrices, fetchYahooSector } from "../utils/kiteClient";
 import {
   analyzeSentimentHybrid,
+  analyzeSentimentHybridBatch,
   fetchNewsHeadlines,
   normalizeSymbol,
+  classifySentiment,
 } from "../utils/newsSentiment";
+import { convertKeywordSentiment } from "../utils/llmSentiment";
 import { scopedLogger } from "../utils/logger";
 import type {
   Holding,
@@ -19,6 +22,7 @@ import type {
   RiskAction,
   SentimentLabel,
   StockRiskMetrics,
+  EnhancedSentimentResult,
 } from "../types/index";
 
 const log = scopedLogger("riskSentiment");
@@ -161,6 +165,7 @@ async function computeStockRiskMetrics(
   topCorrelationPartner: string | null,
   topCorrelationValue: number | null,
   lookbackDays: number,
+  precomputedSentiment?: EnhancedSentimentResult
 ): Promise<StockRiskMetrics> {
   const symbol = normalizeSymbol(holding.symbol);
   const from = subDays(new Date(), lookbackDays);
@@ -181,8 +186,19 @@ async function computeStockRiskMetrics(
     }
   }
 
-  const recentHeadlines = await fetchNewsHeadlines(symbol);
-  const sentiment = await analyzeSentimentHybrid(recentHeadlines, symbol);
+  let recentHeadlines: string[] = [];
+  let sentiment: EnhancedSentimentResult;
+  if (precomputedSentiment) {
+    sentiment = precomputedSentiment;
+    recentHeadlines = precomputedSentiment ? (precomputedSentiment.keyFindings?.length ? precomputedSentiment.keyFindings : []) : [];
+  } else {
+    recentHeadlines = await fetchNewsHeadlines(symbol);
+    try {
+      sentiment = await analyzeSentimentHybrid(recentHeadlines, symbol);
+    } catch (err) {
+      sentiment = convertKeywordSentiment(classifySentiment(recentHeadlines));
+    }
+  }
   const weight = Number(holding.weight.toFixed(2));
   const sector = await resolveSector(symbol, holding.exchange);
 
@@ -324,6 +340,20 @@ export async function analyzePortfolioRiskSentiment(
   const overallRecommendations: string[] = [];
   const riskHighlights: string[] = [];
 
+  // Gather headlines for all holdings, then call LLM once for batched sentiment
+  const headlineItems: Array<{ symbol: string; headlines: string[] }> = [];
+  for (const holding of holdings) {
+    const symbol = normalizeSymbol(holding.symbol);
+    try {
+      const headlines = await fetchNewsHeadlines(symbol);
+      headlineItems.push({ symbol, headlines });
+    } catch (err) {
+      headlineItems.push({ symbol, headlines: [] });
+    }
+  }
+
+  const sentimentMap = await analyzeSentimentHybridBatch(headlineItems as any);
+
   for (const holding of holdings) {
     const symbol = normalizeSymbol(holding.symbol);
     const partnerCorrelationEntries = Object.entries(symbolCorrelationAverages)
@@ -333,6 +363,8 @@ export async function analyzePortfolioRiskSentiment(
     const topCorrelationPartner = partnerCorrelationEntries[0]?.[0] ?? null;
     const topCorrelationValue = partnerCorrelationEntries[0]?.[1] ?? null;
 
+    const precomputedSentiment = sentimentMap[symbol];
+
     const summary = await computeStockRiskMetrics(
       holding,
       benchmarkReturns,
@@ -340,7 +372,8 @@ export async function analyzePortfolioRiskSentiment(
       symbolCorrelationAverages,
       topCorrelationPartner,
       topCorrelationValue,
-      lookbackDays
+      lookbackDays,
+      precomputedSentiment
     );
 
     stockSummaries.push(summary);
