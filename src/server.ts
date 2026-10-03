@@ -4,6 +4,7 @@ import cors from "cors";
 
 import { scopedLogger } from "./utils/logger";
 import { getHoldingsRaw } from "./tools/getHoldings";
+import { scrapeRecommendations, filterBuyRecommendations } from "./tools/brokerageRecommendations";
 import {
   runPnLCommand,
   runRiskSentimentCommand,
@@ -168,12 +169,27 @@ app.get("/api/risk", async (req, res) => {
   }
 });
 
+app.get("/api/recommend/scrape", async (req, res) => {
+  try {
+    const upside = Number(req.query.upside) || 0;
+    const { recommendations } = await scrapeRecommendations();
+    const buyRecommendations = filterBuyRecommendations(recommendations, {
+      minUpsidePct: upside,
+    });
+    return res.json({ count: buyRecommendations.length, recommendations: buyRecommendations });
+  } catch (err) {
+    log.error("/api/recommend/scrape failed", { error: (err as Error).message });
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 app.get("/api/recommend", async (req, res) => {
   try {
     const top = Number(req.query.top) || 8;
     const topN = top >= 5 && top <= 10 ? top : 8;
     const includeHoldings = req.query.includeHoldings !== "false";
-    const result = await runStockRecommendationCommand(topN, includeHoldings);
+    const scope = (req.query.scope as string | undefined) === "nifty" ? "nifty" : "multicap";
+    const result = await runStockRecommendationCommand(topN, includeHoldings, scope);
     if (!result.success) return res.status(500).json({ error: result.error });
     return res.json(result.recommendationReport);
   } catch (err) {

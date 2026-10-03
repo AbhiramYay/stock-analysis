@@ -10,7 +10,7 @@ const log = scopedLogger("llmSentiment");
 const llmCache = new Map<string, { result: EnhancedSentimentResult; expiresAt: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const LLM_OUTPUT_DIR = path.resolve(process.cwd(), "llm-output");
-const LLM_BATCH_CHUNK_SIZE = 6;
+const DEFAULT_LLM_BATCH_SIZE = 8;
 
 function makeCacheKey(
   symbol: string,
@@ -46,6 +46,14 @@ function chunkArray<T>(items: T[], size: number): T[][] {
     chunks.push(items.slice(i, i + size));
   }
   return chunks;
+}
+
+export function getBatchSizeForItems(itemCount: number): number {
+  const configured = Number.parseInt(process.env.LLM_BATCH_SIZE ?? "", 10);
+  if (Number.isFinite(configured) && configured > 0) {
+    return Math.min(configured, itemCount);
+  }
+  return Math.min(DEFAULT_LLM_BATCH_SIZE, itemCount);
 }
 
 function stripCodeFences(text: string): string {
@@ -198,32 +206,61 @@ function parseLlmSentiment(rawText: string): EnhancedSentimentResult {
   };
 }
 
+function classifyFallbackSentiment(headlines: string[]): { score: number; label: "positive" | "neutral" | "negative"; reasoning: string; analystSignals: string[] } {
+  const analystSignals: string[] = [];
+  for (const headline of headlines) {
+    const lower = headline.toLowerCase();
+    if (/\b(upgrade|buy|outperform|accumulate|overweight|target raised)\b/i.test(lower)) {
+      analystSignals.push(headline);
+    }
+    if (/\b(downgrade|sell|underperform|underweight|target cut)\b/i.test(lower)) {
+      analystSignals.push(headline);
+    }
+  }
+
+  if (headlines.length === 0) {
+    return {
+      score: 0,
+      label: "neutral",
+      reasoning: "No recent headlines available.",
+      analystSignals: [],
+    };
+  }
+
+  const score = headlines.reduce((sum, headline) => {
+    const lower = headline.toLowerCase();
+    let value = 0;
+    if (/\b(upgrade|buy|outperform|accumulate|overweight|target raised|strong|beat|surge|profit|growth|optimistic)\b/i.test(lower)) value += 1;
+    if (/\b(downgrade|sell|underperform|underweight|target cut|weak|miss|loss|decline|concern|risk|bearish)\b/i.test(lower)) value -= 1;
+    return sum + value;
+  }, 0);
+
+  const label: "positive" | "neutral" | "negative" = score > 0 ? "positive" : score < 0 ? "negative" : "neutral";
+
+  return {
+    score: label === "positive" ? 1 : label === "negative" ? -1 : 0,
+    label,
+    reasoning: `Keyword-based fallback sentiment for ${headlines.length} headline(s).`,
+    analystSignals: analystSignals.slice(0, 3),
+  };
+}
+
 function buildPrompt(
   symbol: string,
   headlines: string[],
   analystNote: string,
   earningsExcerpt: string
 ): string {
+  const compactHeadlines = headlines.slice(0, 3).map((headline, index) => `${index + 1}. ${headline}`).join("\n") || "None";
+
   return (
-    `You are a financial analysis assistant. Analyse the recent sentiment for ${symbol} using the provided headlines, analyst/brokerage note, and earnings excerpt.\n` +
-    `Provide a single valid JSON object with these properties:\n` +
-    `  - overall_sentiment: -1, 0, or 1\n` +
-    `  - label: positive, neutral, or negative\n` +
-    `  - confidence: a number between 0 and 1\n` +
-    `  - themes: an array of up to 4 short themes summarizing mood and catalysts\n` +
-    `  - key_phrases: an array of up to 6 important phrases from the content\n` +
-    `  - aspects: { earnings, guidance, management, macro }\n` +
-    `  - recommendation: { action: buy, hold, or sell, conviction: 0..1 }\n` +
-    `  - reasoning: a concise explanation\n` +
-    `  - analystSignals: an array of analyst/brokerage tone indicators\n` +
-    `  - keyFindings: an array of up to 4 concise observations\n` +
-    `Use only valid JSON. Do not include markdown, backticks, or any text outside the JSON object.\n` +
-    `Example: {"overall_sentiment": 1, "label": "positive", "confidence": 0.85, "themes": ["earnings", "brokerage upgrade"], "key_phrases": ["upgrade", "strong guidance"], "aspects": {"earnings": "positive", "guidance": "positive", "management": "neutral", "macro": "neutral"}, "recommendation": {"action": "buy", "conviction": 0.75}, "reasoning": "Strong analyst tone and earnings signals.", "analystSignals": ["upgrade"], "keyFindings": ["positive analyst comments"]}\n` +
-    `Headlines:\n` +
-    headlines.map((headline, index) => `${index + 1}. ${headline}`).join("\n") +
-    "\n" +
-    `Analyst/Brokerage Note: ${analystNote || "None available."}\n` +
-    `Earnings Excerpt: ${earningsExcerpt || "None available."}\n`
+    `You are a financial sentiment analyzer. Analyze the recent sentiment for ${symbol}.\n` +
+    `Return valid JSON only with this exact shape:\n` +
+    `{"label":"positive|neutral|negative","confidence":0.0,"themes":["theme"],"recommendation":{"action":"buy|hold|sell","conviction":0.0},"reasoning":"short explanation","analystSignals":["signal"]}\n` +
+    `Rules: keep the response compact; use at most 3 themes and 3 analyst signals.\n` +
+    `Headlines:\n${compactHeadlines}\n` +
+    `Analyst/Brokerage Note: ${analystNote || "none"}\n` +
+    `Earnings Excerpt: ${earningsExcerpt || "none"}\n`
   );
 }
 
@@ -262,40 +299,42 @@ export async function analyzeSentimentWithLLMBatch(
 ): Promise<Record<string, EnhancedSentimentResult>> {
   if (!items || items.length === 0) return {};
 
-  const llm = createLLM();
+  const results: Record<string, EnhancedSentimentResult> = {};
+  const pending: Array<{ symbol: string; headlines: string[]; analystNote: string; earningsExcerpt: string }> = [];
+  const now = Date.now();
 
+  for (const item of items) {
+    const cacheKey = makeCacheKey(item.symbol, item.headlines, item.analystNote, item.earningsExcerpt);
+    const cached = llmCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      results[item.symbol] = cached.result;
+    } else {
+      pending.push(item);
+    }
+  }
+
+  if (pending.length === 0) {
+    return results;
+  }
+
+  const llm = createLLM();
   const buildBatchPrompt = (itemsParam: Array<{ symbol: string; headlines: string[]; analystNote: string; earningsExcerpt: string }>) => {
     const sections = itemsParam
-      .map((it: { symbol: string; headlines: string[]; analystNote: string; earningsExcerpt: string }, idx: number) => {
-        return (
-          `---\nSymbol: ${it.symbol}\nHeadlines:\n` +
-          it.headlines.map((h: string, i: number) => `${i + 1}. ${h}`).join("\n") +
-          "\n" +
-          `Analyst/Brokerage Note: ${it.analystNote || "None available."}\n` +
-          `Earnings Excerpt: ${it.earningsExcerpt || "None available."}\n`
-        );
+      .map((it: { symbol: string; headlines: string[]; analystNote: string; earningsExcerpt: string }) => {
+        const compactHeadlines = it.headlines.slice(0, 3).map((h: string, i: number) => `${i + 1}. ${h}`).join("\n") || "None";
+        return `---\nSymbol: ${it.symbol}\nHeadlines:\n${compactHeadlines}\nAnalyst/Brokerage Note: ${it.analystNote || "none"}\nEarnings Excerpt: ${it.earningsExcerpt || "none"}`;
       })
-      .join("\n");
+      .join("\n\n");
 
     return (
-      `You are a financial analysis assistant. For each symbol section below, analyse the recent sentiment using the provided headlines, analyst/brokerage note, and earnings excerpt.\n` +
-      `Return a single valid JSON object whose keys are the tickers (exactly as given) and whose values are objects with these properties:\n` +
-      `  - overall_sentiment: -1, 0, or 1\n` +
-      `  - label: positive, neutral, or negative\n` +
-      `  - confidence: a number between 0 and 1\n` +
-      `  - themes: an array of up to 4 short themes summarizing mood and catalysts\n` +
-      `  - key_phrases: an array of up to 6 important phrases from the content\n` +
-      `  - aspects: { earnings, guidance, management, macro }\n` +
-      `  - recommendation: { action: buy, hold, or sell, conviction: 0..1 }\n` +
-      `  - reasoning: a concise explanation\n` +
-      `  - analystSignals: an array of analyst/brokerage tone indicators\n` +
-      `Use only valid JSON. Do not include markdown, backticks, or any text outside the JSON object.\n` +
-      `Example: {"INFY": {"overall_sentiment": 1, "label": "positive", "confidence": 0.9, "themes": ["earnings", "upgrade"], "key_phrases": ["upgrade", "strong guidance"], "aspects": {"earnings": "positive", "guidance": "positive", "management": "neutral", "macro": "neutral"}, "recommendation": {"action": "buy", "conviction": 0.75}, "reasoning": "Positive sentiment from headlines and analyst tone.", "analystSignals": ["upgrade"], "keyFindings": ["positive upgrade commentary"]}}\n\n` +
+      `You are a financial sentiment analyzer. For each symbol below, analyze the headlines and note. Return compact valid JSON only as an object keyed by symbol.\n` +
+      `Example: {"INFY":{"label":"positive","confidence":0.82,"themes":["earnings"],"recommendation":{"action":"buy","conviction":0.8},"reasoning":"short explanation","analystSignals":["upgrade"]}}\n` +
+      `Rules: keep output compact; use at most 3 themes and 3 analyst signals.\n\n` +
       sections
     );
   };
 
-  const prompt = buildBatchPrompt(items);
+  const prompt = buildBatchPrompt(pending);
   const response = await llm.call([new HumanMessage(prompt)]) as any;
   const text = response?.text ?? String(response);
 
@@ -336,50 +375,55 @@ export async function analyzeSentimentWithLLMBatch(
     );
   }
 
-  const now = Date.now();
-  const results: Record<string, EnhancedSentimentResult> = {};
+  const parsedObject = (parsed ?? {}) as Record<string, any>;
 
-  for (const it of items) {
-    const raw = parsed[it.symbol];
-    if (!raw) {
-      throw new Error(`LLM batch response missing entry for ${it.symbol}`);
+  for (const it of pending) {
+    const raw = parsedObject[it.symbol];
+    if (!raw || typeof raw !== "object") {
+      log.warn("LLM batch response missing entry; falling back to keyword sentiment", { symbol: it.symbol });
+      const fallback = convertKeywordSentiment(classifyFallbackSentiment(it.headlines));
+      results[it.symbol] = fallback;
+      continue;
     }
 
-    const score = raw.overall_sentiment ?? raw.overallSentiment ?? raw.score;
-    const recommendation = raw.recommendation ?? { action: "hold", conviction: 0.5 };
+    const label = typeof raw.label === "string" ? raw.label : (raw.overall_sentiment === 1 ? "positive" : raw.overall_sentiment === -1 ? "negative" : "neutral");
+    const score = typeof raw.overall_sentiment === "number"
+      ? raw.overall_sentiment
+      : label === "positive"
+      ? 1
+      : label === "negative"
+      ? -1
+      : 0;
+    const confidence = Math.max(0, Math.min(1, Number(raw.confidence ?? 0.5)));
+    const themes = Array.isArray(raw.themes) ? raw.themes : [];
+    const analystSignals = Array.isArray(raw.analystSignals) ? raw.analystSignals : [];
+    const recommendation = raw.recommendation ?? {
+      action: label === "positive" ? "buy" : label === "negative" ? "sell" : "hold",
+      conviction: 0.5,
+    };
+    const reasoning = typeof raw.reasoning === "string" && raw.reasoning.trim()
+      ? raw.reasoning
+      : `${label} sentiment based on the provided headlines.`;
+    const keyFindings = Array.isArray(raw.keyFindings) ? raw.keyFindings : (Array.isArray(raw.key_phrases) ? raw.key_phrases : themes.slice(0, 3));
     const aspects = raw.aspects ?? { earnings: "neutral", guidance: "neutral", management: "neutral", macro: "neutral" };
-    const keyFindings = raw.keyFindings ?? raw.key_phrases ?? raw.key_phrases ?? [];
-
-    if (
-      score === undefined ||
-      raw.label === undefined ||
-      raw.confidence === undefined ||
-      raw.themes === undefined ||
-      keyFindings === undefined ||
-      raw.reasoning === undefined ||
-      raw.analystSignals === undefined
-    ) {
-      throw new Error("LLM sentiment response is missing required fields.");
-    }
 
     const sentiment: EnhancedSentimentResult = {
       score: score as -1 | 0 | 1,
       overallSentiment: score as -1 | 0 | 1,
-      label: raw.label,
-      confidence: Math.max(0, Math.min(1, raw.confidence)),
-      themes: raw.themes,
-      keyFindings: keyFindings,
+      label: label as EnhancedSentimentResult["label"],
+      confidence,
+      themes,
+      keyFindings,
       aspects,
       recommendation: {
         action: recommendation.action,
         conviction: Math.max(0, Math.min(1, Number(recommendation.conviction ?? 0.5))),
       },
-      reasoning: raw.reasoning,
-      analystSignals: raw.analystSignals,
+      reasoning,
+      analystSignals,
       method: raw.method ?? "llm",
     };
 
-    // cache per-item
     const cacheKey = makeCacheKey(it.symbol, it.headlines, it.analystNote, it.earningsExcerpt);
     llmCache.set(cacheKey, { result: sentiment, expiresAt: now + CACHE_TTL_MS });
     results[it.symbol] = sentiment;

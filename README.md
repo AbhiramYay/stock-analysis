@@ -11,7 +11,7 @@ A production-ready TypeScript agent that uses **LangChain.js** and **Zerodha Kit
 | Live holdings & weights | `holdings` | `GET /api/holdings` | `/` |
 | Monthly PnL + portfolio summary | `pnl` | `POST /api/pnl` | `/pnl` |
 | Risk, beta, volatility, news sentiment | `analysis` | `GET /api/risk` | `/risk` |
-| NSE buy recommendations (fundamentals + sentiment) | `recommend` | `GET /api/recommend` | `/recommend` |
+| Multi-cap buy recommendations (large/mid/small cap) | `recommend` | `GET /api/recommend` | `/recommend` |
 | Rebalance plan & execute | `rebalance` | `POST /api/rebalance` | `/rebalance` |
 | Natural-language agent | `query` | `POST /api/query` | — |
 
@@ -167,7 +167,7 @@ npm run start:server
 | `GET` | `/api/holdings` | Current portfolio |
 | `POST` | `/api/pnl` | Body: `{ "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" }` (optional) |
 | `GET` | `/api/risk?lookback=90` | Risk & sentiment report |
-| `GET` | `/api/recommend?top=8&includeHoldings=true` | Stock buy recommendations (slow; ~several min) |
+| `GET` | `/api/recommend?top=8&includeHoldings=true&scope=multicap` | Multi-cap stock buy recommendations (slow; ~several min) |
 | `POST` | `/api/rebalance` | Body: `{ "targetWeightsStr": "INFY:30,TCS:40,HDFC:30" }` |
 | `POST` | `/api/rebalance/execute` | Same body + `Authorization: Bearer <ADMIN_API_TOKEN>` |
 | `POST` | `/api/query` | Body: `{ "prompt": "..." }` |
@@ -237,16 +237,19 @@ Computes per-stock open/close PnL, a **portfolio summary** (total PnL, PnL %, ho
 
 ---
 
-### `recommend` — NSE stock buy recommendations
+### `recommend` — multi-cap stock buy recommendations
 
-Scans the **Nifty 50** universe (plus your holdings, unless `--nifty-only`), scores each stock on fundamentals, news/analyst sentiment, and 6-month momentum, then returns **5–10 diversified picks** with reasoning and sector allocation.
+Scans a **multi-cap NSE universe** (large, mid, and small caps) by default, and can also switch to the **Nifty 50** universe with `--scope nifty` or `--nifty-only`. Each stock is scored on fundamentals, sentiment, and 6-month momentum, then returned as **5–10 diversified picks** with reasoning and sector allocation.
 
 ```bash
-# Top 8 recommendations (default)
+# Top 8 recommendations across large/mid/small caps (default)
 npm run dev -- recommend
 
 # Top 10, Nifty 50 only
 npm run dev -- recommend --top 10 --nifty-only
+
+# Top 8 from the classic Nifty 50 universe
+npm run dev -- recommend --scope nifty
 ```
 
 **Data sources:** Yahoo Finance (ROE, debt/equity, earnings growth, P/E, prices), Yahoo/Google News RSS (headlines and brokerage/analyst tone).

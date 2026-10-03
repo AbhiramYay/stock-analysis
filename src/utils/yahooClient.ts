@@ -54,7 +54,7 @@ async function refreshYahooSession(): Promise<{ cookie: string; crumb: string }>
   }
 
   session = { cookie, crumb, expiresAt: Date.now() + SESSION_TTL_MS };
-  log.debug("Yahoo session refreshed", { crumbLength: crumb.length });
+  log.debug("Yahoo session refreshed");
   return { cookie, crumb };
 }
 
@@ -66,6 +66,87 @@ async function getYahooSession(): Promise<{ cookie: string; crumb: string }> {
 }
 
 export type QuoteSummaryResult = Record<string, unknown>;
+
+export function normalizeDiscoveredSymbols(symbols: Array<string | null | undefined>): string[] {
+  const normalized = symbols
+    .filter((symbol): symbol is string => typeof symbol === "string" && symbol.trim().length > 0)
+    .map((symbol) => symbol.trim().toUpperCase())
+    .map((symbol) => symbol.replace(/\.(NS|BO|NSE|BSE)$/i, ""))
+    .filter((symbol) => symbol.length > 0 && !symbol.includes(" ") && !symbol.includes("-"))
+    .filter((symbol) => !/^(NIFTY|BANKNIFTY|SENSEX|FINNIFTY|MIDCPNIFTY|ETF|BEES|REIT|INVIT|^\^)/i.test(symbol));
+
+  return Array.from(new Set(normalized));
+}
+
+export async function searchYahooSymbols(query: string, limit = 20): Promise<string[]> {
+  try {
+    const response = await axios.get("https://query1.finance.yahoo.com/v1/finance/search", {
+      params: {
+        q: query,
+        quotesCount: limit,
+        newsCount: 0,
+        enableFuzzyQuery: false,
+      },
+      timeout: 15000,
+      headers: {
+        "User-Agent": YAHOO_USER_AGENT,
+        Accept: "application/json",
+      },
+    });
+
+    const quotes = Array.isArray(response.data?.quotes) ? response.data.quotes : [];
+    const symbols = quotes.map((item: any) => item?.symbol).filter(Boolean);
+    return normalizeDiscoveredSymbols(symbols);
+  } catch (err) {
+    log.warn(`Yahoo symbol search failed for query "${query}"`, { error: (err as Error).message });
+    return [];
+  }
+}
+
+export function getFallbackSymbolSeeds(): string[] {
+  return [
+    "RELIANCE","TCS","INFY","HDFCBANK","ICICIBANK","SBIN","ITC","LT","MARUTI","ASIANPAINT",
+    "HINDUNILVR","ULTRACEMCO","JSWSTEEL","TATASTEEL","BAJFINANCE","KOTAKBANK","AXISBANK",
+    "ADANIENT","ADANIPORTS","BHARTIARTL","INDUSINDBK","HCLTECH","TECHM","WIPRO","COALINDIA",
+    "DABUR","DIVISLAB","DRREDDY","SUNPHARMA","CIPLA","LUPIN","M&M","TITAN","PIDILITIND",
+    "APOLLOHOSP","POLYCAB","PAGEIND","TATAMOTORS","BHEL","GAIL","IDEA","PNB","FEDERALBNK",
+    "BANKBARODA","CANBK","BANDHANBNK","JINDALSTEL","NMDC","AARTIIND","UPL","GODREJCP",
+    "COLPAL","ZYDUSLIFE","AUROPHARMA","BIOCON","IRCTC","DELHIVERY","ZEEL","DMART","BEL",
+    "MUTHOOTFIN","SRF","PIIND","VOLTAS","CHOLAFIN","ABCAPITAL","PFC","NHPC","IOC","ONGC",
+    "SIEMENS","INDIGO","TVSMOTOR","TRENT","NBCC","HUDCO","KALYANKJIL","BALKRISIND","LTI","MINDTREE"
+  ];
+}
+
+export async function discoverNseSymbols(limit = 180): Promise<string[]> {
+  const queries = [
+    "india stocks",
+    "nse stocks",
+    "bse stocks",
+    "top indian companies",
+    "mid cap india",
+    "small cap india",
+    "financial stocks",
+    "healthcare stocks",
+    "energy stocks",
+    "consumer stocks",
+    "technology stocks",
+    "pharma stocks",
+  ];
+
+  const discovered = new Set<string>();
+
+  for (const query of queries) {
+    const matches = await searchYahooSymbols(query, 20);
+    matches.forEach((symbol) => discovered.add(symbol));
+    if (discovered.size >= limit) break;
+  }
+
+  if (discovered.size > 0) {
+    return Array.from(discovered).slice(0, limit);
+  }
+
+  return getFallbackSymbolSeeds().slice(0, limit);
+}
 
 /**
  * Fetch one or more quoteSummary modules for a Yahoo ticker (e.g. RELIANCE.NS).
@@ -95,7 +176,7 @@ export async function fetchQuoteSummary(
   } catch (err) {
     const status = axios.isAxiosError(err) ? err.response?.status : undefined;
     if (retryOnAuth && (status === 401 || status === 403)) {
-      log.debug("Yahoo quoteSummary auth failed, refreshing session", { ticker, status });
+      log.debug("Yahoo quoteSummary auth failed; refreshing session", { ticker });
       session = null;
       const retry = await getYahooSession();
       try {

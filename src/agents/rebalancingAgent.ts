@@ -21,6 +21,7 @@ import {
   stockRecommendationTool,
   analyzeStockRecommendations,
 } from "../tools/stockRecommendation";
+import { brokerageRecommendationTool } from "../tools/brokerageRecommendations";
 import { calculateMonthlyPnL } from "../utils/pnl";
 import { scopedLogger } from "../utils/logger";
 import type {
@@ -55,6 +56,7 @@ Your capabilities:
 - **rebalancePortfolio**: Analyse current vs target weights and generate precise trade suggestions.
 - **riskSentiment**: Analyse portfolio risk and market sentiment using volatility, beta, correlations and recent headlines.
 - **stockRecommendation**: Rank NSE buy ideas using fundamentals, news/analyst sentiment, and sector diversification.
+- **scrapeRecommendations**: Scrape brokerage buy recommendations from public financial sources and return them as normalized JSON.
 - **placeOrder**: Execute BUY or SELL orders on Zerodha (use only when explicitly asked).
 
 Rebalancing Workflow:
@@ -83,6 +85,7 @@ function buildAgent() {
     rebalancePortfolioTool,
     riskSentimentTool,
     stockRecommendationTool,
+    brokerageRecommendationTool,
     placeOrderTool,
   ];
 
@@ -107,8 +110,7 @@ export async function runRebalanceCommand(
   input: RebalanceInput
 ): Promise<AgentResult> {
   const start = Date.now();
-  log.info("Starting rebalance command", {
-    targetWeights: input.targetWeights,
+  log.debug("Starting rebalance command", {
     dryRun: input.dryRun,
     driftThreshold: input.driftThreshold,
   });
@@ -117,7 +119,7 @@ export async function runRebalanceCommand(
     // ── Step 1 & 2: Fetch holdings ────────────────────────────────────────────
     log.info("Step 1: Fetching portfolio holdings...");
     const { holdings, totalValue, totalPnL } = await getHoldingsRaw();
-    log.info(`Portfolio: ${holdings.length} stocks, ₹${totalValue.toFixed(2)} total`);
+    log.debug(`Portfolio summary: ${holdings.length} stocks, ₹${totalValue.toFixed(2)} total`);
 
     const portfolio = {
       holdings,
@@ -127,7 +129,7 @@ export async function runRebalanceCommand(
     };
 
     // ── Step 3 & 4: Generate rebalancing plan ─────────────────────────────────
-    log.info("Step 2-4: Computing rebalancing plan...");
+    log.debug("Computing rebalancing plan");
     const plan = computeRebalancingPlan(
       holdings,
       totalValue,
@@ -135,9 +137,9 @@ export async function runRebalanceCommand(
       input.driftThreshold
     );
 
-    log.info(`Rebalancing plan: ${plan.suggestions.length} trades suggested`);
+    log.debug(`Rebalancing plan: ${plan.suggestions.length} trades suggested`);
     plan.suggestions.forEach((s) => {
-      log.info(`  ${s.action} ${s.quantity}x ${s.symbol} @ ₹${s.estimatedPrice} (~₹${s.estimatedValue.toFixed(0)})`);
+      log.debug(`  ${s.action} ${s.quantity}x ${s.symbol} @ ₹${s.estimatedPrice} (~₹${s.estimatedValue.toFixed(0)})`);
     });
 
     let placedOrders: PlacedOrder[] | undefined;
@@ -147,7 +149,7 @@ export async function runRebalanceCommand(
       const autoExecute = process.env.AUTO_EXECUTE_TRADES === "true";
 
       if (autoExecute) {
-        log.info("Step 5: Executing trades (AUTO_EXECUTE_TRADES=true)...");
+        log.debug("Executing trades (AUTO_EXECUTE_TRADES=true)");
         placedOrders = await executeBatchOrders(
           plan.suggestions.map((s) => ({
             symbol: s.symbol,
@@ -159,15 +161,15 @@ export async function runRebalanceCommand(
 
         const placed = placedOrders.filter((o) => o.status === "PLACED").length;
         const failed = placedOrders.filter((o) => o.status === "FAILED").length;
-        log.info(`Orders: ${placed} placed, ${failed} failed`);
+        log.debug(`Orders: ${placed} placed, ${failed} failed`);
       } else {
-        log.info(
+        log.debug(
           "Step 5: Skipped order execution (dry run or AUTO_EXECUTE_TRADES not set). " +
           "Use --execute flag or set AUTO_EXECUTE_TRADES=true to execute."
         );
       }
     } else if (input.dryRun) {
-      log.info("Step 5: Dry run mode — no orders placed.");
+      log.debug("Dry run mode — no orders placed");
     }
 
     return {
@@ -196,7 +198,7 @@ export async function runRiskSentimentCommand(
   lookbackDays = 90
 ): Promise<AgentResult> {
   const start = Date.now();
-  log.info("Starting risk and sentiment analysis", { lookbackDays });
+  log.debug("Starting risk and sentiment analysis", { lookbackDays });
 
   try {
     const { holdings, totalValue, totalPnL } = await getHoldingsRaw();
@@ -209,7 +211,7 @@ export async function runRiskSentimentCommand(
 
     const riskReport = await analyzePortfolioRiskSentiment(lookbackDays);
 
-    log.info("Risk and sentiment analysis complete", {
+    log.debug("Risk and sentiment analysis complete", {
       stocks: holdings.map((h) => h.symbol),
       benchmark: riskReport.benchmarkSymbol,
     });
@@ -237,15 +239,17 @@ export async function runRiskSentimentCommand(
 
 export async function runStockRecommendationCommand(
   topN = 8,
-  includeHoldings = true
+  includeHoldings = true,
+  scope: "nifty" | "multicap" = "multicap"
 ): Promise<AgentResult> {
   const start = Date.now();
-  log.info("Starting stock recommendation command", { topN, includeHoldings });
+  log.debug("Starting stock recommendation command", { topN, includeHoldings, scope });
 
   try {
     const recommendationReport = await analyzeStockRecommendations({
       topN,
       includeHoldings,
+      scope,
     });
 
     return {
@@ -276,7 +280,7 @@ export async function runStockRecommendationCommand(
  */
 export async function runPnLCommand(fromDate?: string, toDate?: string): Promise<AgentResult> {
   const start = Date.now();
-  log.info("Starting monthly PnL command...", { fromDate, toDate });
+  log.debug("Starting monthly PnL command", { fromDate, toDate });
 
   try {
     // Step 1: Fetch holdings
@@ -291,10 +295,10 @@ export async function runPnLCommand(fromDate?: string, toDate?: string): Promise
     };
 
     // Step 2+3: Compute monthly PnL (fetches historical prices internally)
-    log.info("Step 2: Computing monthly PnL...");
+    log.debug("Computing monthly PnL");
     const pnlReport = await calculateMonthlyPnL(holdings, fromDate, toDate);
 
-    log.info("Monthly PnL computed", {
+    log.debug("Monthly PnL computed", {
       totalPnL: `₹${pnlReport.totalPnLAbsolute.toFixed(2)}`,
       pct: `${pnlReport.totalPnLPercent.toFixed(2)}%`,
     });
@@ -325,7 +329,7 @@ export async function runPnLCommand(fromDate?: string, toDate?: string): Promise
  * The agent will decide which tools to call based on the query.
  */
 export async function runAgentQuery(userQuery: string): Promise<string> {
-  log.info("Starting agent query", { query: userQuery });
+  log.debug("Starting agent query", { query: userQuery });
 
   const agent = buildAgent();
 

@@ -21,7 +21,7 @@ import type {
   OrderParams,
 } from "../types/index";
 import { scopedLogger } from "./logger";
-import { fetchQuoteSummary, YAHOO_USER_AGENT, yahooTicker } from "./yahooClient";
+import { discoverNseSymbols, fetchQuoteSummary, YAHOO_USER_AGENT, yahooTicker } from "./yahooClient";
 
 const log = scopedLogger("KiteClient");
 
@@ -95,9 +95,7 @@ export function getKiteClient(): AxiosInstance {
     }
   );
 
-  log.info("Kite enctoken client initialized", {
-    token: `${enctoken.slice(0, 6)}...${enctoken.slice(-4)}`,
-  });
+  log.debug("Kite client initialized");
 
   return _axiosClient;
 }
@@ -263,15 +261,19 @@ export async function fetchYahooSector(
 /**
  * Fetch all current equity holdings.
  */
+export async function fetchNseEquitySymbols(limit = 200): Promise<string[]> {
+  return discoverNseSymbols(limit);
+}
+
 export async function fetchHoldings(): Promise<KiteHolding[]> {
-  log.debug("Fetching holdings...");
+  log.debug("Fetching holdings from Kite");
 
   try {
     const data = await throttledGet<{ status: string; data: KiteHolding[] }>(
       "/portfolio/holdings"
     );
     const holdings = data.data ?? [];
-    log.info(`Fetched ${holdings.length} holdings`);
+    log.debug(`Fetched ${holdings.length} holdings from Kite`);
     return holdings;
   } catch (err) {
     log.error("Failed to fetch holdings", { error: (err as Error).message });
@@ -416,7 +418,7 @@ export async function placeKiteOrder(params: OrderParams): Promise<KiteOrderResp
     ...(params.triggerPrice !== undefined && { trigger_price: String(params.triggerPrice) }),
   });
 
-  log.info(`Placing ${params.transactionType} order`, {
+  log.debug(`Placing ${params.transactionType} order`, {
     symbol:    params.symbol,
     quantity:  params.quantity,
     orderType: params.orderType,
@@ -435,7 +437,7 @@ export async function placeKiteOrder(params: OrderParams): Promise<KiteOrderResp
         body.toString()
       );
       const orderId = res.data.data.order_id;
-      log.info("Order placed", { orderId });
+      log.debug("Order placed", { orderId });
       return { order_id: orderId };
     } catch (err) {
       const msg   = (err as Error).message;
@@ -497,7 +499,7 @@ async function warmInstrumentCache(exchange: string): Promise<void> {
 
   // First caller — start the fetch and store the promise so others can share it
   const fetchPromise = (async () => {
-    log.info(`Loading instruments list for ${exchange}...`);
+    log.debug(`Loading instruments list for ${exchange}`);
 
     let rawData: unknown;
     const exchangePath = `/instruments/${exchange.toLowerCase()}`;
@@ -550,7 +552,7 @@ async function warmInstrumentCache(exchange: string): Promise<void> {
     }
 
     _exchangeInstruments.set(exchange, symbolMap);
-    log.info(`Instruments cache populated for ${exchange}`, {
+    log.debug(`Instruments cache populated for ${exchange}`, {
       count: symbolMap.size,
     });
   })();

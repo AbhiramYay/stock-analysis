@@ -51,7 +51,7 @@ function enrichHoldings(raw: KiteHolding[]): { holdings: Holding[]; totalValue: 
 
 const getHoldingsToolSchema: any = z.object({});
 const getHoldingsToolFunc: any = async (): Promise<string> => {
-  log.info("Tool invoked: getHoldings");
+  log.debug("Tool invoked: getHoldings");
 
   try {
     const rawHoldings = await fetchHoldings();
@@ -65,7 +65,7 @@ const getHoldingsToolFunc: any = async (): Promise<string> => {
       totalPnL,
     };
 
-    log.info("Holdings fetched", {
+    log.debug("Holdings fetched", {
       count: holdings.length,
       totalValue: `₹${totalValue.toFixed(2)}`,
       totalPnL: `₹${totalPnL.toFixed(2)}`,

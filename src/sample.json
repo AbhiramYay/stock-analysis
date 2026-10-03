@@ -1,0 +1,936 @@
+  "ADANIPORTS": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.8,
+    "themes": [
+      "multi-year expansion",
+      "stock climbs",
+      "momentum stock"
+    ],
+    "key_phrases": [
+      "multi-year expansion",
+      "climbs 9% in two days",
+      "hits new high",
+      "stock price today",
+      "signal some risk"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.8
+    },
+    "reasoning": "Multiple headlines highlight positive momentum for Adani Ports, including hitting new highs and analyst upgrades suggesting multi-year expansion. While one headline mentions 'some risk', the overall sentiment from analyst notes and news is positive.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "APOLLOHOSP": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.9,
+    "themes": [
+      "strong earnings",
+      "52-week high",
+      "attractive financial prospects"
+    ],
+    "key_phrases": [
+      "hit 52-week high",
+      "strong Q4 FY26 earnings",
+      "attractive financial prospects",
+      "investors will be pleased",
+      "strong 154% return"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.9
+    },
+    "reasoning": "The headlines overwhelmingly point to positive sentiment for Apollo Hospitals, with mentions of hitting a 52-week high due to strong earnings, attractive financial prospects, and significant historical returns. Analyst recommendations are also positive.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "ASIANPAINT": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.8,
+    "themes": [
+      "shares rise",
+      "positive Q1 results",
+      "stock buzzing"
+    ],
+    "key_phrases": [
+      "shares rise nearly 15% in a month",
+      "stock is buzzing",
+      "US-Iran peace deal sends oil prices tumbling",
+      "delivered you a 21% gain",
+      "brokerages suggest"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.75
+    },
+    "reasoning": "Multiple headlines indicate positive sentiment for Asian Paints, with shares rising significantly and analysts suggesting positive actions after Q1 results. The news about oil prices tumbling due to a peace deal is also a positive catalyst.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "AXISBANK": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.8,
+    "themes": [
+      "shares fell",
+      "Nifty Bank down",
+      "top Nifty losers"
+    ],
+    "key_phrases": [
+      "Nifty Bank down 1%",
+      "shares fell today",
+      "top Nifty losers",
+      "institutional investors",
+      "stock price today"
+    ],
+    "aspects": {
+      "earnings": "neutral",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.7
+    },
+    "reasoning": "Headlines consistently point to a negative sentiment for Axis Bank, with mentions of shares falling and being among the top losers in the Nifty Bank index. While one article notes institutional investor interest, the prevailing news is negative.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "BAJAJ-AUTO": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.7,
+    "themes": [
+      "buyback announcement",
+      "mixed earnings quality",
+      "stock fall"
+    ],
+    "key_phrases": [
+      "buyback",
+      "record date",
+      "earnings are of questionable quality",
+      "shares fall",
+      "strong domestic, overseas demand"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "Bajaj Auto has a mixed sentiment. The buyback announcement is positive, and Q4 results beat expectations with strong demand. However, one headline questions the quality of earnings, and another mentions shares falling due to tariffs and profit booking. Analyst recommendations are mixed.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "BAJAJFINANCE": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.7,
+    "themes": [
+      "regulatory shifts",
+      "shareholders looking for exit",
+      "AUM rises"
+    ],
+    "key_phrases": [
+      "shareholders might be looking for exit",
+      "navigates growth amid regulatory shifts",
+      "Q2 AUM Rises 24%",
+      "stock Up",
+      "rating disconnect widens"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.6
+    },
+    "reasoning": "While Bajaj Finance saw its Assets Under Management (AUM) rise and stock go up, a prominent headline suggests shareholders might be looking for an exit, and another mentions a 'rating disconnect'. The company is also navigating regulatory shifts, which could be a concern.",
+    "analystSignals": []
+  },
+  "BHARTIARTL": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.8,
+    "themes": [
+      "shares fall",
+      "NBFC expansion",
+      "top Nifty losers"
+    ],
+    "key_phrases": [
+      "shares fall over 3%",
+      "top Nifty losers",
+      "mega NBFC expansion",
+      "ROCE trajectory",
+      "invested ... five years ago are up 378%"
+    ],
+    "aspects": {
+      "earnings": "negative",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.7
+    },
+    "reasoning": "Bharti Airtel's shares fell significantly, making it a top Nifty loser, despite a mention of a mega NBFC expansion. While one headline highlights strong long-term returns for investors, the recent price action and analyst mentions of 'stocks to buy' for other companies suggest a cautious outlook for Bharti Airtel.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "BRITANNIA": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.8,
+    "themes": [
+      "52-week low",
+      "stock sliding",
+      "warns of price hikes"
+    ],
+    "key_phrases": [
+      "hit 52-week low",
+      "stock's been sliding",
+      "fundamentals look decent",
+      "warns of price hikes",
+      "analyst says sell on rise"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.7
+    },
+    "reasoning": "Britannia's sentiment is negative, with headlines mentioning hitting a 52-week low, stock sliding, and analysts advising to sell on rise due to price hikes. Despite some mention of decent fundamentals, the overall outlook is bearish.",
+    "analystSignals": [
+      "sell"
+    ]
+  },
+  "CIPLA": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.8,
+    "themes": [
+      "settlement agreements",
+      "highest-ever yearly revenue",
+      "strong fundamentals"
+    ],
+    "key_phrases": [
+      "settlement agreements",
+      "shares jump 5%",
+      "highest-ever yearly revenue",
+      "strong fundamentals",
+      "top pharma stocks"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.8
+    },
+    "reasoning": "Cipla shows positive sentiment with settlement agreements, a jump in share price after Q4 results, and recording highest-ever yearly revenue. Analysts also consider it a top pharma stock. The earnings excerpt shows negative earnings growth, but the overall news is positive.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "COALINDIA": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.8,
+    "themes": [
+      "stake sale",
+      "shares tumble",
+      "OFS discount"
+    ],
+    "key_phrases": [
+      "shares tumble nearly 4%",
+      "stake sale via OFS",
+      "shares fall 6%",
+      "OFS opens",
+      "positive offtake performance"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.7
+    },
+    "reasoning": "Coal India's sentiment is negative due to the government's stake sale via an Offer for Sale (OFS), leading to shares tumbling and falling. While there's a mention of positive offtake performance, the dominant news is about the stock price drop related to the OFS.",
+    "analystSignals": []
+  },
+  "DIVISLAB": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.7,
+    "themes": [
+      "analysts updating estimates",
+      "margin worries",
+      "growth outlook positive"
+    ],
+    "key_phrases": [
+      "analysts are updating their estimates",
+      "weakness in stock",
+      "slips 3% on margin worries",
+      "analysts positive on growth outlook",
+      "earnings not telling the story"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "Divi's Labs has mixed signals. Analysts are updating estimates and are positive on the growth outlook, but the stock slipped due to margin worries, and some articles question if fundamentals are driving performance. The earnings excerpt shows positive earnings growth but a high forward P/E.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "DRREDDY": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.8,
+    "themes": [
+      "stock jumps",
+      "brokerages bullish",
+      "Q3 results beat"
+    ],
+    "key_phrases": [
+      "stock jumps over 4%",
+      "brokerages turn bullish",
+      "Q3 results beat estimates",
+      "gains 5%",
+      "analyst suggests Nifty strategy"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.8
+    },
+    "reasoning": "Dr. Reddy's Laboratories shows strong positive sentiment with headlines indicating a stock jump, brokerages turning bullish after Q3 results beat estimates, and analyst recommendations. The earnings excerpt shows negative earnings growth, but the overall news is positive.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "EICHERMOT": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.7,
+    "themes": [
+      "analysts forecasting",
+      "doing the right things",
+      "stock price prediction"
+    ],
+    "key_phrases": [
+      "analysts are forecasting",
+      "doing the right things",
+      "multiply its share price",
+      "stock price prediction",
+      "stock price live"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "The sentiment for Eicher Motors is neutral. Headlines mention analysts forecasting future performance and the company doing the right things to multiply its share price. However, there's no strong positive or negative catalyst highlighted, and the earnings excerpt shows a low return on equity.",
+    "analystSignals": []
+  },
+  "HCLTECH": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.9,
+    "themes": [
+      "stocks crash",
+      "slower growth forecast",
+      "brokerages downgrade"
+    ],
+    "key_phrases": [
+      "stocks crash over 10%",
+      "forecasts slower growth",
+      "brokerages downgrade stock",
+      "IT stocks drag Nifty",
+      "shares may have run too fast too soon"
+    ],
+    "aspects": {
+      "earnings": "negative",
+      "guidance": "negative",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.8
+    },
+    "reasoning": "HCLTech is facing significant negative sentiment, with headlines reporting a crash in share price, downgrades from brokerages, and forecasts of slower growth. The IT sector is also mentioned as dragging the Nifty. The earnings excerpt shows negative earnings growth.",
+    "analystSignals": [
+      "downgrade"
+    ]
+  },
+  "HDFCBANK": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.8,
+    "themes": [
+      "shares drop",
+      "probe into interest payments",
+      "decline most in 2 years"
+    ],
+    "key_phrases": [
+      "shares drop 2%",
+      "probe into Rs 45-crore interest payments",
+      "decline most in 2 years",
+      "buy this dip?",
+      "stock rating - 'buy'"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.7
+    },
+    "reasoning": "HDFC Bank is experiencing negative sentiment with reports of a probe into interest payments and shares declining significantly. While some brokerages maintain a 'buy' rating, the recent price action and specific negative news suggest caution.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "HDFCLIFE": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.8,
+    "themes": [
+      "falls after weak Q4",
+      "analysts cut estimates",
+      "soft growth"
+    ],
+    "key_phrases": [
+      "falls 4% after weak Q4",
+      "analysts cut estimates",
+      "see FY27 recovery",
+      "soft growth",
+      "not many are piling into"
+    ],
+    "aspects": {
+      "earnings": "negative",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.7
+    },
+    "reasoning": "HDFC Life's sentiment is negative, with shares falling after weak Q4 results, analysts cutting estimates, and mentions of 'soft growth'. While a recovery is seen in FY27, the immediate outlook appears bearish.",
+    "analystSignals": []
+  },
+  "HEROMOTOCO": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.7,
+    "themes": [
+      "stellar returns",
+      "sales rise",
+      "unpleasant surprises"
+    ],
+    "key_phrases": [
+      "stellar returns of 129%",
+      "total sales rise 9%",
+      "unpleasant surprises",
+      "stock price prediction",
+      "investors have seen"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "Hero MotoCorp has a mixed sentiment. While past returns have been stellar and sales are rising, there's a mention of potential 'unpleasant surprises'. The earnings excerpt shows positive earnings growth, but the overall news is not strongly positive or negative.",
+    "analystSignals": []
+  },
+  "HINDALCO": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.8,
+    "themes": [
+      "shares rise",
+      "aluminium prices rise",
+      "top stocks in news"
+    ],
+    "key_phrases": [
+      "shares rise",
+      "aluminium prices rise",
+      "earned a 27% CAGR",
+      "top stocks in news",
+      "stock price today"
+    ],
+    "aspects": {
+      "earnings": "negative",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.7
+    },
+    "reasoning": "Hindalco shows positive sentiment with shares rising, driven by rising aluminium prices. Analysts are also recommending it as a stock to buy. The earnings excerpt shows negative earnings growth, but the overall news is positive.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "HINDUNILVR": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.5,
+    "themes": [],
+    "key_phrases": [],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "There are no headlines or analyst notes provided for HINDUNILVR, only an earnings excerpt. Therefore, the sentiment is neutral.",
+    "analystSignals": []
+  },
+  "ICICIBANK": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.8,
+    "themes": [
+      "pips Reliance Industries",
+      "moderate loan growth",
+      "earnings optimism"
+    ],
+    "key_phrases": [
+      "pips Reliance Industries",
+      "second-largest weighted stock",
+      "moderate loan growth",
+      "earnings optimism",
+      "shares drop 3%"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "ICICI Bank has mixed signals. It's noted for pip-ing Reliance Industries in Nifty weighting and has earnings optimism, but also shares dropped due to moderate loan growth. Analyst recommendations are mixed, with some picking it as a buy.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "INDUSINDBK": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.7,
+    "themes": [
+      "investors still down",
+      "shares jump",
+      "Q4 earnings"
+    ],
+    "key_phrases": [
+      "investors... are still down 24%",
+      "shares jump 6.1%",
+      "Q4 earnings",
+      "stock price today",
+      "buzzing stocks"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.6
+    },
+    "reasoning": "IndusInd Bank has a negative sentiment due to a significant portion of investors being down over three years, despite a recent jump in share price after Q4 earnings. Analyst notes are not available, but the historical performance and the mixed short-term price action suggest caution.",
+    "analystSignals": []
+  },
+  "INFY": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.9,
+    "themes": [
+      "Nifty IT slumps",
+      "stocks crash",
+      "Accenture guidance cut"
+    ],
+    "key_phrases": [
+      "Nifty IT slumps 6%",
+      "stocks crash up to 8%",
+      "Accenture guidance cut",
+      "partnerships",
+      "AI-driven transformation"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.8
+    },
+    "reasoning": "Infosys is experiencing negative sentiment due to the broader IT sector slump, triggered by Accenture's guidance cut. Headlines mention stocks crashing and Nifty IT slumping. While there are mentions of partnerships and AI adoption, these are overshadowed by the sector-wide downturn.",
+    "analystSignals": []
+  },
+  "ITC": {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.8,
+    "themes": [
+      "slips",
+      "plunges",
+      "sell on rise"
+    ],
+    "key_phrases": [
+      "slips 9% in 3 days",
+      "plunges 32% so far in 2026",
+      "should you buy or sell?",
+      "dividend yield stocks",
+      "AI-driven Insurance Modernisation"
+    ],
+    "aspects": {
+      "earnings": "negative",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.7
+    },
+    "reasoning": "ITC shows a strongly negative sentiment with headlines indicating significant price drops (9% in 3 days, 32% YTD) and analysts advising to sell on rise. Despite mentions of partnerships and dividend yield, the stock performance is the dominant negative factor.",
+    "analystSignals": [
+      "sell"
+    ]
+  },
+  "JSWSTEEL": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.7,
+    "themes": [
+      "stocks in focus",
+      "top gainers/losers",
+      "steel stocks rally"
+    ],
+    "key_phrases": [
+      "stocks in focus",
+      "top gainers, losers",
+      "steel stocks at record highs",
+      "shares slip",
+      "stock price today"
+    ],
+    "aspects": {
+      "earnings": "neutral",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "JSW Steel has mixed signals. While steel stocks are rallying and it's mentioned as a top stock in focus, there are also headlines about shares slipping and being among top losers. Analyst recommendations are also split. The earnings excerpt shows significant negative earnings growth.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "KOTAKBANK": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.8,
+    "themes": [
+      "stock split approved",
+      "institutional owners happy",
+      "buy calls"
+    ],
+    "key_phrases": [
+      "stock split approved",
+      "institutional owners must be happy",
+      "stock continues to impress",
+      "brokerages issue fresh buy calls",
+      "analysts expect up to 31% upside"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.8
+    },
+    "reasoning": "Kotak Mahindra Bank shows strong positive sentiment with a stock split approval, happy institutional owners, and brokerages issuing fresh buy calls with upside potential. The earnings excerpt shows positive earnings growth.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "LT": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.8,
+    "themes": [
+      "earnings growth",
+      "solar tracker supply",
+      "expert sees opportunity"
+    ],
+    "key_phrases": [
+      "ticks all the boxes",
+      "earnings growth",
+      "sees opportunity",
+      "solar trackers",
+      "stock price today"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.75
+    },
+    "reasoning": "Larsen & Toubro has positive sentiment with headlines highlighting earnings growth, a significant supply deal for solar trackers, and expert opinions seeing opportunity. The earnings excerpt shows negative earnings growth, but the overall news is positive.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "M&M": {
+    "overall_sentiment": 1,
+    "label": "positive",
+    "confidence": 0.8,
+    "themes": [
+      "stellar returns",
+      "selects Mobileye's technology",
+      "AI-powered solutions"
+    ],
+    "key_phrases": [
+      "stellar returns of 129%",
+      "selects Mobileye's SuperVision",
+      "AI-Powered Digital Supply Chain Solutions",
+      "partnerships",
+      "stock price today"
+    ],
+    "aspects": {
+      "earnings": "positive",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "buy",
+      "conviction": 0.7
+    },
+    "reasoning": "Mahindra & Mahindra shows positive sentiment with stellar past returns, selection of advanced technology for future models, and partnerships for AI-powered solutions. The earnings excerpt shows strong earnings growth.",
+    "analystSignals": []
+  },
+  "MARUTI": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.7,
+    "themes": [
+      "flex-fuel car launch",
+      "shares close flat",
+      "margin improvement projection"
+    ],
+    "key_phrases": [
+      "launches India’s first flex-fuel car",
+      "shares close flat",
+      "margin improvement",
+      "price is out of tune with earnings",
+      "stock picks"
+    ],
+    "aspects": {
+      "earnings": "negative",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "Maruti Suzuki has mixed sentiment. The launch of a flex-fuel car is positive, but shares closed flat, and there's a concern that the price is out of tune with earnings. Analysts project margin improvement, but the earnings excerpt shows negative earnings growth.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "NEPHARM": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.5,
+    "themes": [],
+    "key_phrases": [],
+    "aspects": {
+      "earnings": "neutral",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "There are no headlines or analyst notes provided for NEPHARM, only an earnings excerpt. Therefore, the sentiment is neutral.",
+    "analystSignals": []
+  },
+  "NTPC": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.7,
+    "themes": [
+      "fined by exchanges",
+      "looks inexpensive",
+      "gains for fifth straight session"
+    ],
+    "key_phrases": [
+      "fined Rs 5.31 lakh",
+      "looks inexpensive",
+      "not attractive enough",
+      "gains for fifth straight session",
+      "stock picks"
+    ],
+    "aspects": {
+      "earnings": "negative",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "hold",
+      "conviction": 0.5
+    },
+    "reasoning": "NTPC has mixed sentiment. While the stock is gaining for consecutive sessions and looks inexpensive, it was also fined by exchanges. Analysts are split, with some seeing upside in NTPC Green Energy but not necessarily NTPC itself. The earnings excerpt shows negative earnings growth.",
+    "analystSignals": [
+      "buy"
+    ]
+  },
+  "ONGC": {
+    "overall_sentiment": 0,
+    "label": "neutral",
+    "confidence": 0.8,
+    "themes": [
+      "mixed oil stocks",
+      "under pressure",
+      "analysts say buy"
+    ],
+    "key_phrases": [
+      "under pressure",
+      "fall up to 2%",
+      "analysts say 'buy'",
+      "Q4 results miss",
+      "splendid
+Extracted JSON candidate: {
+    "overall_sentiment": -1,
+    "label": "negative",
+    "confidence": 0.7,
+    "themes": [
+      "stock pressure",
+      "business trailing market",
+      "investor curiosity"
+    ],
+    "key_phrases": [
+      "Adani Group shares under pressure",
+      "Business Is Trailing The Market",
+      "shares aren't",
+      "investor curiosity",
+      "stock price today"
+    ],
+    "aspects": {
+      "earnings": "neutral",
+      "guidance": "neutral",
+      "management": "neutral",
+      "macro": "neutral"
+    },
+    "recommendation": {
+      "action": "sell",
+      "conviction": 0.6
+    },
+    "reasoning": "Headlines indicate pressure on Adani Group shares, with one article suggesting the business is trailing the market while shares are not. Analyst notes are mixed, with one mentioning a 'buy' recommendation for BSE, which is not directly related to Adani Enterprises. The earnings excerpt shows positive earnings growth but a high forward P/E and debt/equity ratio.",
+    "analystSignals": [
+      "buy"
+    ]
+  }

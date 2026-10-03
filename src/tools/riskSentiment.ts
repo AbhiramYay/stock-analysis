@@ -326,7 +326,7 @@ export async function analyzePortfolioRiskSentiment(
     throw new Error("No holdings found. Portfolio risk and sentiment analysis requires at least one stock.");
   }
 
-  log.info("Starting risk and sentiment analysis", { lookbackDays, symbols: holdings.map((h) => h.symbol) });
+  log.debug("Starting risk and sentiment analysis", { lookbackDays, symbols: holdings.map((h) => h.symbol) });
 
   const sectorWeights = await computeSectorWeights(holdings);
 
@@ -467,7 +467,7 @@ const riskSentimentToolConfig: any = {
     "Returns stock-level risk metrics, sentiment scoring, and actionable adjustment recommendations.",
   schema: undefined as any,
   func: async ({ lookbackDays = 90 }: { lookbackDays?: number }): Promise<string> => {
-    log.info("Tool invoked: riskSentiment", { lookbackDays });
+    log.debug("Tool invoked: riskSentiment", { lookbackDays });
     try {
       const report = await analyzePortfolioRiskSentiment(lookbackDays);
       return JSON.stringify(report, null, 2);

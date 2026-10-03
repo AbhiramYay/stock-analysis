@@ -74,7 +74,7 @@ export const placeOrderTool = new DynamicStructuredTool({
     exchange?: "NSE" | "BSE";
     product?: "CNC" | "MIS" | "NRML";
   }): Promise<string> => {
-    log.info("Tool invoked: placeOrder", {
+    log.debug("Tool invoked: placeOrder", {
       symbol,
       transactionType,
       quantity,
@@ -135,7 +135,7 @@ export const placeOrderTool = new DynamicStructuredTool({
         message: placed.message!,
       };
 
-      log.info(`Order placed`, {
+      log.debug(`Order placed`, {
         orderId: placed.orderId,
         symbol,
         action: transactionType,
@@ -176,7 +176,7 @@ export async function executeBatchOrders(
   const results: PlacedOrder[] = [];
 
   for (const order of orders) {
-    log.info(`Executing batch order: ${order.transactionType} ${order.quantity}x ${order.symbol}`);
+    log.debug(`Executing batch order: ${order.transactionType} ${order.quantity}x ${order.symbol}`);
 
     const orderParams: OrderParams = {
       symbol: order.symbol.toUpperCase(),

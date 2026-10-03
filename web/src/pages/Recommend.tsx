@@ -46,6 +46,7 @@ function sentimentBadge(label: string) {
 export default function RecommendPage() {
   const [topN, setTopN] = useState(8);
   const [includeHoldings, setIncludeHoldings] = useState(true);
+  const [scope, setScope] = useState<"multicap" | "nifty">("multicap");
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -56,7 +57,7 @@ export default function RecommendPage() {
     setError(null);
     try {
       const res = await axios.get("/api/recommend", {
-        params: { top: topN, includeHoldings },
+        params: { top: topN, includeHoldings, scope },
         timeout: 600000,
       });
       setReport(res.data);
@@ -72,8 +73,8 @@ export default function RecommendPage() {
   return (
     <>
       <PageHeader
-        title="Stock Recommendations (NSE)"
-        subtitle="Ranks Nifty 50 large-caps using fundamentals, news and analyst sentiment, and 6-month momentum — diversified across sectors."
+        title="Multi-cap Equity Recommendations"
+        subtitle="Ranks the strongest large-, mid-, and small-cap NSE stocks using fundamentals, sentiment, and 6-month momentum — without forcing sector diversification."
       />
 
       <div className="card border-0 shadow-sm mb-4">
@@ -96,7 +97,21 @@ export default function RecommendPage() {
                 ))}
               </select>
             </div>
-            <div className="col-sm-8 col-md-5">
+            <div className="col-sm-4 col-md-3">
+              <label htmlFor="scope" className="form-label small text-muted mb-1">
+                Universe
+              </label>
+              <select
+                id="scope"
+                className="form-select"
+                value={scope}
+                onChange={(e) => setScope(e.target.value as "multicap" | "nifty")}
+              >
+                <option value="multicap">Multi-cap</option>
+                <option value="nifty">Nifty 50</option>
+              </select>
+            </div>
+            <div className="col-sm-8 col-md-4">
               <div className="form-check mt-4">
                 <input
                   className="form-check-input"
@@ -137,7 +152,7 @@ export default function RecommendPage() {
       {loading && !report && (
         <div className="alert alert-info d-flex align-items-center gap-2" role="status">
           <div className="spinner-border spinner-border-sm" aria-hidden />
-          Scanning {includeHoldings ? "Nifty 50 + holdings" : "Nifty 50"} — may take several minutes…
+          Scanning {scope === "nifty" ? (includeHoldings ? "Nifty 50 + holdings" : "Nifty 50") : (includeHoldings ? "multi-cap equities + holdings" : "multi-cap equities")} — may take several minutes…
         </div>
       )}
 

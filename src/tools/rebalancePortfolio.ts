@@ -166,7 +166,7 @@ export const rebalancePortfolioTool = new DynamicStructuredTool({
     targetWeights: TargetWeights;
     driftThreshold?: number;
   }): Promise<string> => {
-    log.info("Tool invoked: rebalancePortfolio", { targetWeights, driftThreshold });
+    log.debug("Tool invoked: rebalancePortfolio", { targetWeights, driftThreshold });
 
     try {
       // Step 1: Fetch live holdings
@@ -186,7 +186,7 @@ export const rebalancePortfolioTool = new DynamicStructuredTool({
         driftThreshold
       );
 
-      log.info("Rebalancing plan generated", {
+      log.debug("Rebalancing plan generated", {
         trades: plan.suggestions.length,
         totalBuy: `₹${plan.totalBuyValue.toFixed(2)}`,
         totalSell: `₹${plan.totalSellValue.toFixed(2)}`,

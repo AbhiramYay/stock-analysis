@@ -1,21 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  src/tools/stockRecommendation.ts
-//  NSE stock buy recommendations: fundamentals + news/analyst sentiment + diversification
+//  Multi-cap equity recommendations using direct market-data scoring.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { subMonths } from "date-fns";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { NIFTY_50_SYMBOLS } from "../data/nifty50";
+import type { MarketCapTier } from "../data/equityUniverse";
 import { getHoldingsRaw } from "./getHoldings";
-import { fetchHistoricalPrices, fetchYahooSector } from "../utils/kiteClient";
+import { fetchHistoricalPrices, fetchNseEquitySymbols, fetchYahooSector } from "../utils/kiteClient";
 import { fetchYahooFundamentals } from "../utils/yahooFundamentals";
-import {
-  analyzeSentimentHybridBatch,
-  fetchNewsHeadlines,
-  normalizeSymbol,
-  classifySentiment,
-} from "../utils/newsSentiment";
+import { fetchNewsHeadlines, normalizeSymbol, classifySentiment } from "../utils/newsSentiment";
 import { convertKeywordSentiment } from "../utils/llmSentiment";
+import { scrapeRecommendations, extractScrapedSymbols } from "./brokerageRecommendations";
 import { scopedLogger } from "../utils/logger";
 import type {
   SentimentLabel,
@@ -29,13 +26,12 @@ const log = scopedLogger("stockRecommendation");
 const DATA_SOURCES = [
   "Yahoo Finance (fundamentals: ROE, debt/equity, earnings growth, P/E)",
   "Yahoo Finance & Google News RSS (headlines, brokerage/analyst tone, earnings context)",
-  "Google Gemini LLM multi-source sentiment analysis (headlines + analyst note + earnings excerpt)",
   "Yahoo Finance historical prices (6-month momentum)",
 ];
 
 const METHODOLOGY =
-  "Scores each NSE large-cap on fundamentals (0–40), LLM-enhanced sentiment (0–35), and 6M momentum (0–25). " +
-  "A risk overlay penalises weak balance sheet or momentum signals, and top picks are ranked and diversified across sectors (max 2 per sector).";
+  "Scores each NSE equity on fundamentals (0–40), sentiment (0–35), and 6M momentum (0–25). " +
+  "For multicap analysis, the top-ranked stocks are selected purely on score so the basket is not constrained by sector diversification.";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -218,25 +214,43 @@ function passesFilters(
   return true;
 }
 
-function diversifyPicks(candidates: StockRecommendation[], topN: number): StockRecommendation[] {
+function diversifyPicks(
+  candidates: StockRecommendation[],
+  topN: number,
+  scope: "nifty" | "multicap"
+): StockRecommendation[] {
   const sorted = [...candidates].sort((a, b) => b.compositeScore - a.compositeScore);
   const picked: StockRecommendation[] = [];
-  const sectorCounts: Record<string, number> = {};
+
+  if (scope === "nifty") {
+    const sectorCounts: Record<string, number> = {};
+    const tierCounts: Record<MarketCapTier, number> = { large: 0, mid: 0, small: 0 };
+
+    for (const c of sorted) {
+      if (picked.length >= topN) break;
+      const count = sectorCounts[c.sector] ?? 0;
+      const tier = (c as StockRecommendation & { marketCapTier?: MarketCapTier }).marketCapTier ?? "large";
+      if (count >= 2 || tierCounts[tier] >= 3) continue;
+      sectorCounts[c.sector] = count + 1;
+      tierCounts[tier] += 1;
+      picked.push(c);
+    }
+
+    if (picked.length < topN) {
+      for (const c of sorted) {
+        if (picked.length >= topN) break;
+        if (picked.some((p) => p.symbol === c.symbol)) continue;
+        picked.push(c);
+      }
+    }
+
+    return picked.map((item, index) => ({ ...item, rank: index + 1 }));
+  }
 
   for (const c of sorted) {
     if (picked.length >= topN) break;
-    const count = sectorCounts[c.sector] ?? 0;
-    if (count >= 2) continue;
-    sectorCounts[c.sector] = count + 1;
+    if (picked.some((p) => p.symbol === c.symbol)) continue;
     picked.push(c);
-  }
-
-  if (picked.length < topN) {
-    for (const c of sorted) {
-      if (picked.length >= topN) break;
-      if (picked.some((p) => p.symbol === c.symbol)) continue;
-      picked.push(c);
-    }
   }
 
   return picked.map((item, index) => ({ ...item, rank: index + 1 }));
@@ -254,8 +268,34 @@ function buildSectorAllocation(recommendations: StockRecommendation[]): Record<s
   );
 }
 
-async function buildUniverse(includeHoldings: boolean): Promise<string[]> {
-  const symbols = new Set<string>(NIFTY_50_SYMBOLS);
+export async function resolveRecommendationUniverse(options: { scope?: "nifty" | "multicap"; includeHoldings?: boolean }): Promise<string[]> {
+  const scope = options.scope ?? "multicap";
+  if (scope === "nifty") {
+    return NIFTY_50_SYMBOLS;
+  }
+
+  const scrapedRecommendationsResult = await scrapeRecommendations();
+  const scrapedSymbols = extractScrapedSymbols(scrapedRecommendationsResult.recommendations);
+  if (scrapedSymbols.length > 0) {
+    log.info("Using scraped brokerage buy recommendations for multicap universe", {
+      count: scrapedSymbols.length,
+      source: scrapedRecommendationsResult.source,
+    });
+    return scrapedSymbols;
+  }
+
+  log.warn("No scraped brokerage symbols available for multicap; falling back to dynamic NSE symbol discovery");
+  const dynamicSymbols = await fetchNseEquitySymbols(180);
+  if (dynamicSymbols.length > 0) {
+    return dynamicSymbols;
+  }
+
+  log.warn("No dynamic NSE symbols found for multicap universe. Recommendation universe will be empty.");
+  return [];
+}
+
+async function buildUniverseEntries(includeHoldings: boolean, scope: "nifty" | "multicap") {
+  const symbols = new Set<string>(await resolveRecommendationUniverse({ scope }));
   if (includeHoldings) {
     try {
       const { holdings } = await getHoldingsRaw();
@@ -266,13 +306,20 @@ async function buildUniverse(includeHoldings: boolean): Promise<string[]> {
       });
     }
   }
-  return Array.from(symbols);
+
+  return Array.from(symbols).map((symbol) => ({
+    symbol,
+    exchange: "NSE" as const,
+    marketCapTier: "large" as MarketCapTier,
+    sector: "Unknown" as string,
+  }));
 }
 
 export interface RecommendStocksOptions {
   topN?: number;
   includeHoldings?: boolean;
   throttleMs?: number;
+  scope?: "nifty" | "multicap";
 }
 
 export async function analyzeStockRecommendations(
@@ -280,13 +327,12 @@ export async function analyzeStockRecommendations(
 ): Promise<StockRecommendationReport> {
   const topN = Math.min(Math.max(options.topN ?? 8, 5), 10);
   const throttleMs = options.throttleMs ?? 350;
-  const universe = await buildUniverse(options.includeHoldings ?? true);
+  const scope = options.scope ?? "multicap";
+  const universeEntries = await buildUniverseEntries(options.includeHoldings ?? true, scope);
 
-  log.info("Starting stock recommendation scan", { universeSize: universe.length, topN });
+  log.debug("Starting stock recommendation scan", { universeSize: universeEntries.length, topN, scope });
 
   const candidates: StockRecommendation[] = [];
-
-  // First pass: gather data for all symbols (fundamentals, headlines, sector, momentum)
   const gathered: Array<{
     symbol: string;
     exchange: string;
@@ -294,29 +340,33 @@ export async function analyzeStockRecommendations(
     headlines: string[];
     sector: string | null;
     sixMonthReturnPct: number | null;
+    marketCapTier: MarketCapTier;
   }> = [];
 
-  for (let i = 0; i < universe.length; i += 1) {
-    const symbol = universe[i];
-    log.debug(`Gathering data ${i + 1}/${universe.length}: ${symbol}`);
+  for (let i = 0; i < universeEntries.length; i += 1) {
+    const entry = universeEntries[i];
+    log.debug(`Gathering data ${i + 1}/${universeEntries.length}: ${entry.symbol}`);
 
-    const exchange = "NSE";
+    const exchange = entry.exchange;
     const [fundamentals, headlines, sector, sixMonthReturnPct] = await Promise.all([
-      fetchYahooFundamentals(symbol, exchange),
-      fetchNewsHeadlines(symbol),
-      fetchYahooSector(symbol, exchange),
-      fetchSixMonthReturn(symbol, exchange),
+      fetchYahooFundamentals(entry.symbol, exchange),
+      fetchNewsHeadlines(entry.symbol),
+      fetchYahooSector(entry.symbol, exchange),
+      fetchSixMonthReturn(entry.symbol, exchange),
     ]);
 
-    gathered.push({ symbol, exchange, fundamentals, headlines, sector: sector ?? null, sixMonthReturnPct });
+    gathered.push({
+      symbol: entry.symbol,
+      exchange,
+      fundamentals,
+      headlines,
+      sector: sector ?? null,
+      sixMonthReturnPct,
+      marketCapTier: entry.marketCapTier,
+    });
     await sleep(throttleMs);
   }
 
-  // Call LLM once for all symbols using batched sentiment analysis
-  const batchItems = gathered.map((g) => ({ symbol: g.symbol, headlines: g.headlines }));
-  const sentimentMap = await analyzeSentimentHybridBatch(batchItems as any);
-
-  // Second pass: score and filter using batched sentiment results
   for (const g of gathered) {
     const symbol = g.symbol;
     const exchange = g.exchange;
@@ -324,8 +374,9 @@ export async function analyzeStockRecommendations(
     const headlines = g.headlines;
     const sector = g.sector;
     const sixMonthReturnPct = g.sixMonthReturnPct;
+    const marketCapTier = g.marketCapTier;
 
-    const sentiment = sentimentMap[symbol] ?? convertKeywordSentiment(classifySentiment(headlines));
+    const sentiment = convertKeywordSentiment(classifySentiment(headlines));
     const fund = scoreFundamentals(fundamentals);
     const sent = scoreSentiment(sentiment.label, sentiment.analystSignals, sentiment.confidence);
     const mom = scoreMomentum(sixMonthReturnPct);
@@ -368,22 +419,24 @@ export async function analyzeStockRecommendations(
       sentimentReasoning: sent.reasoning + " " + sentiment.reasoning,
       combinedReasoning: `${fund.reasoning} ${sent.reasoning} ${mom.reasoning}`,
       alphaReasoning,
-    });
+      marketCapTier,
+    } as StockRecommendation & { marketCapTier: MarketCapTier });
   }
 
-  const recommendations = diversifyPicks(candidates, topN);
+  const recommendations = diversifyPicks(candidates, topN, scope);
   const sectorAllocation = buildSectorAllocation(recommendations);
 
-  log.info("Stock recommendations ready", {
-    scanned: universe.length,
+  log.debug("Stock recommendations ready", {
+    scanned: universeEntries.length,
     passed: candidates.length,
     picked: recommendations.length,
+    scope,
   });
 
   return {
     recommendations,
     sectorAllocation,
-    universeScanned: universe.length,
+    universeScanned: universeEntries.length,
     candidatesPassed: candidates.length,
     dataSources: DATA_SOURCES,
     methodology: METHODOLOGY,
@@ -395,13 +448,15 @@ const stockRecommendationToolSchema: any = undefined;
 const stockRecommendationToolFunc: any = async ({
   topN,
   includeHoldings = true,
+  scope = "multicap",
 }: {
   topN?: number;
   includeHoldings?: boolean;
+  scope?: "nifty" | "multicap";
 }): Promise<string> => {
-  log.info("Tool invoked: stockRecommendation", { topN, includeHoldings });
+  log.debug("Tool invoked: stockRecommendation", { topN, includeHoldings, scope });
   try {
-    const report = await analyzeStockRecommendations({ topN, includeHoldings });
+    const report = await analyzeStockRecommendations({ topN, includeHoldings, scope });
     return JSON.stringify(report, null, 2);
   } catch (err) {
     const msg = `stockRecommendation failed: ${(err as Error).message}`;
@@ -413,9 +468,8 @@ const stockRecommendationToolFunc: any = async ({
 const stockRecommendationToolConfig: any = {
   name: "stockRecommendation",
   description:
-    "Generate ranked NSE stock buy recommendations for the Indian market. " +
-    "Combines Yahoo Finance fundamentals (ROE, debt/equity, earnings growth), " +
-    "news and analyst sentiment from RSS feeds, and 6-month momentum. " +
+    "Generate ranked equity buy recommendations for large-, mid-, and small-cap NSE stocks. " +
+    "Combines Yahoo Finance fundamentals, news and analyst sentiment, and 6-month momentum. " +
     "Returns top 5–10 diversified picks with reasoning and sector allocation.",
   schema: stockRecommendationToolSchema,
   func: stockRecommendationToolFunc,

@@ -44,7 +44,7 @@ export const getHistoricalPriceTool = new DynamicStructuredTool({
     date: string;
     exchange?: "NSE" | "BSE";
   }): Promise<string> => {
-    log.info(`Tool invoked: getHistoricalPrice`, { symbol, date, exchange });
+    log.debug(`Tool invoked: getHistoricalPrice`, { symbol, date, exchange });
 
     // Validate date format
     const parsedDate = parseISO(date);
@@ -73,7 +73,7 @@ export const getHistoricalPriceTool = new DynamicStructuredTool({
         volume: candle.volume,
       };
 
-      log.info(`Historical price fetched`, {
+      log.debug(`Historical price fetched`, {
         symbol,
         actualDate: output.date,
         close: output.close,

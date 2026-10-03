@@ -204,6 +204,7 @@ export interface StockRecommendation {
   symbol: string;
   exchange: string;
   sector: string;
+  marketCapTier?: "large" | "mid" | "small";
   rank: number;
   compositeScore: number;
   alphaScore: number;

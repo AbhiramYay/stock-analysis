@@ -147,11 +147,12 @@ program
 program
   .command("recommend")
   .description(
-    "Rank NSE buy ideas using fundamentals, news/analyst sentiment, and sector diversification"
+    "Rank NSE buy ideas across large-, mid-, and small-cap equities using fundamentals, sentiment, and sector diversification"
   )
   .option("-n, --top <count>", "Number of recommendations (5–10, default 8)", "8")
+  .option("-s, --scope <scope>", "Universe scope: multicap (default) or nifty", "multicap")
   .option("--nifty-only", "Scan only Nifty 50 universe, exclude portfolio symbols")
-  .action(async (opts: { top: string; niftyOnly?: boolean }) => {
+  .action(async (opts: { top: string; scope: string; niftyOnly?: boolean }) => {
     try {
       const topN = parseInt(opts.top, 10);
       if (Number.isNaN(topN) || topN < 5 || topN > 10) {
@@ -159,7 +160,8 @@ program
         process.exit(1);
       }
 
-      const result = await runStockRecommendationCommand(topN, !opts.niftyOnly);
+      const scope = opts.niftyOnly ? "nifty" : (opts.scope === "nifty" ? "nifty" : "multicap");
+      const result = await runStockRecommendationCommand(topN, !opts.niftyOnly, scope);
       displayResult(result);
       if (!result.success) process.exit(1);
     } catch (err) {

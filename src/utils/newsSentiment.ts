@@ -1,7 +1,12 @@
 import axios from "axios";
 import { scopedLogger } from "./logger";
 import type { EnhancedSentimentResult, SentimentLabel } from "../types/index";
-import { analyzeSentimentWithLLM, analyzeSentimentWithLLMBatch, convertKeywordSentiment } from "./llmSentiment";
+import {
+  analyzeSentimentWithLLM,
+  analyzeSentimentWithLLMBatch,
+  convertKeywordSentiment,
+  getBatchSizeForItems,
+} from "./llmSentiment";
 import { fetchYahooFundamentals } from "./yahooFundamentals";
 
 const log = scopedLogger("newsSentiment");
@@ -253,7 +258,7 @@ export async function fetchNewsHeadlines(symbol: string): Promise<string[]> {
         headers: { Accept: "application/rss+xml, application/xml, text/xml" },
       });
       parseRssItems(response.data)
-        .slice(0, 6)
+        .slice(0, 3)
         .forEach((item) => {
           const text = item.snippet
             ? `${item.title} — ${item.snippet}`
@@ -265,7 +270,7 @@ export async function fetchNewsHeadlines(symbol: string): Promise<string[]> {
     }
   }
 
-  return Array.from(headlines).slice(0, 8);
+  return Array.from(headlines).slice(0, 4);
 }
 
 export async function analyzeSentimentHybrid(
@@ -277,10 +282,9 @@ export async function analyzeSentimentHybrid(
   }
 
   const analystNote = extractAnalystNote(headlines);
-  const earningsExcerpt = await buildEarningsExcerpt(symbol);
 
   try {
-    return await analyzeSentimentWithLLM(headlines, symbol, analystNote, earningsExcerpt);
+    return await analyzeSentimentWithLLM(headlines, symbol, analystNote, "");
   } catch (err) {
     log.warn(`LLM sentiment failed for ${symbol}, falling back to keyword sentiment`, {
       error: (err as Error).message,
@@ -296,15 +300,12 @@ export async function analyzeSentimentHybridBatch(
   if (!items || items.length === 0) return results;
 
   // prepare detailed items for LLM batch
-  const detailed = await Promise.all(
-    items.map(async (it) => {
-      const analystNote = extractAnalystNote(it.headlines);
-      const earningsExcerpt = await buildEarningsExcerpt(it.symbol);
-      return { symbol: it.symbol, headlines: it.headlines, analystNote, earningsExcerpt };
-    })
-  );
+  const detailed = items.map((it) => {
+    const analystNote = extractAnalystNote(it.headlines);
+    return { symbol: it.symbol, headlines: it.headlines, analystNote, earningsExcerpt: "" };
+  });
 
-  const chunkSize = 6;
+  const chunkSize = getBatchSizeForItems(detailed.length);
   for (let i = 0; i < detailed.length; i += chunkSize) {
     const chunk = detailed.slice(i, i + chunkSize);
     try {
