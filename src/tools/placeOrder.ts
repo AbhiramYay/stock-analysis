@@ -23,7 +23,7 @@ const log = scopedLogger("placeOrder");
 
 // ─── LangChain Tool Definition ────────────────────────────────────────────────
 
-export const placeOrderTool = new DynamicStructuredTool({
+const placeOrderToolConfig: any = {
   name: "placeOrder",
   description:
     "Place a BUY or SELL equity order on Zerodha Kite Connect. " +
@@ -156,7 +156,9 @@ export const placeOrderTool = new DynamicStructuredTool({
       return JSON.stringify(output, null, 2);
     }
   },
-});
+};
+
+export const placeOrderTool = new DynamicStructuredTool(placeOrderToolConfig) as unknown as DynamicStructuredTool;
 
 // ─── Batch order execution ────────────────────────────────────────────────────
 

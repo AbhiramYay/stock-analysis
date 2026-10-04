@@ -129,6 +129,8 @@ export type RiskAction =
   | "CONSIDER INCREASE"
   | "INCREASE";
 
+export type RiskPriorityRank = 1 | 2 | 3;
+
 export type AspectRating = "positive" | "neutral" | "negative";
 export interface SentimentAspects {
   earnings: AspectRating;
@@ -161,6 +163,9 @@ export interface StockRiskMetrics {
   symbol: string;
   sector: string;
   weight: number;
+  sectorWeightPct: number;
+  periodReturnPct: number | null;
+  benchmarkRelativeReturnPct: number | null;
   volatilityAnnual: number;
   beta: number | null;
   averageCorrelation: number;
@@ -180,6 +185,9 @@ export interface StockRiskMetrics {
   riskReviewRequired: boolean;
   hiddenRiskFlags: string[];
   recommendedAction: RiskAction;
+  priorityRank: RiskPriorityRank;
+  categoryRank: number;
+  rankingScore: number;
 }
 
 export interface PortfolioRiskSentimentReport {

@@ -16,6 +16,9 @@ import PageHeader from "../components/ui/PageHeader";
 import LoadingState from "../components/ui/LoadingState";
 import DataTable from "../components/ui/DataTable";
 import SortableTh from "../components/ui/SortableTh";
+import type { PortfolioRiskSentimentReport } from "../../../src/types";
+
+type RiskPageReport = Pick<PortfolioRiskSentimentReport, "benchmarkSymbol" | "sectorWeights" | "stockSummaries">;
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
@@ -33,17 +36,20 @@ function actionBadge(action: string) {
 
 export default function RiskPage() {
   const [lookback, setLookback] = useState(90);
-  const [report, setReport] = useState<any>(null);
+  const [report, setReport] = useState<RiskPageReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { handleSort, sort, indicator } = useTableSort("volatilityAnnual", "desc");
+  const { handleSort, sort, indicator } = useTableSort("priorityRank", "asc");
 
   async function fetchRisk() {
     setLoading(true);
+    setError(null);
     try {
-      const res = await axios.get(`/api/risk?lookback=${lookback}`);
+      const res = await axios.get<RiskPageReport>(`/api/risk?lookback=${lookback}`);
       setReport(res.data);
     } catch (err: any) {
-      setReport({ error: err.message });
+      setReport(null);
+      setError(err instanceof Error ? err.message : "Unable to load risk analysis.");
     } finally {
       setLoading(false);
     }
@@ -55,7 +61,7 @@ export default function RiskPage() {
 
   const sectorChartData = () => {
     if (!report?.sectorWeights) return null;
-    const entries = Object.entries(report.sectorWeights).sort((a: any, b: any) => b[1] - a[1]);
+    const entries = Object.entries(report.sectorWeights).sort((a, b) => b[1] - a[1]);
     return {
       labels: entries.map((e) => e[0]),
       datasets: [
@@ -82,14 +88,14 @@ export default function RiskPage() {
   const volatilityChartData = () => {
     if (!report?.stockSummaries?.length) return null;
     const items = [...report.stockSummaries]
-      .sort((a: any, b: any) => b.volatilityAnnual - a.volatilityAnnual)
+      .sort((a, b) => b.volatilityAnnual - a.volatilityAnnual)
       .slice(0, 12);
     return {
-      labels: items.map((i: any) => i.symbol),
+      labels: items.map((i) => i.symbol),
       datasets: [
         {
           label: "Annual Volatility %",
-          data: items.map((i: any) => i.volatilityAnnual),
+          data: items.map((i) => i.volatilityAnnual),
           backgroundColor: "rgba(13, 110, 253, 0.7)",
           borderRadius: 6,
         },
@@ -137,15 +143,26 @@ export default function RiskPage() {
         </div>
       </div>
 
+      <div className="alert alert-info mb-4" role="note">
+        <strong>How stocks are ranked within each priority:</strong> scores are weighted percentiles against
+        other stocks in the same priority group, not predicted returns. Priority 1 favors benchmark-relative
+        performance (30%), positive sentiment conviction (25%), lower volatility (15%), lower beta (10%),
+        lower correlation (8%), smaller holding weight (5%), lower sector exposure (4%), and fewer risk flags (3%).
+        Priority 2 favors underperformance (25%), negative sentiment conviction (25%), higher volatility (15%),
+        beta (10%), correlation (10%), exposure (10%), and risk flags (5%). Priority 3 favors lower volatility
+        (35%), beta (15%), correlation (10%), smaller holding and sector exposure (25%), neutral sentiment (10%),
+        and relative performance (5%). Missing benchmark returns score neutrally. Lower rank in the group is first.
+      </div>
+
       {loading && !report && <LoadingState message="Analysing risk and sentiment…" />}
 
-      {report?.error && (
+      {error && (
         <div className="alert alert-danger" role="alert">
-          {report.error}
+          {error}
         </div>
       )}
 
-      {report && !report.error && (
+      {report && (
         <>
           <div className="row g-4 mb-4">
             {sectorChartData() && (
@@ -181,9 +198,13 @@ export default function RiskPage() {
             <DataTable>
               <thead className="table-light">
                 <tr>
+                  <SortableTh column="priorityRank" label="Priority" onSort={handleSort} indicator={indicator} />
+                  <SortableTh column="categoryRank" label="Rank in group" align="end" onSort={handleSort} indicator={indicator} />
+                  <SortableTh column="rankingScore" label="Score / 100" align="end" onSort={handleSort} indicator={indicator} />
                   <SortableTh column="symbol" label="Symbol" onSort={handleSort} indicator={indicator} />
                   <SortableTh column="sector" label="Sector" onSort={handleSort} indicator={indicator} />
                   <SortableTh column="weight" label="Weight %" align="end" onSort={handleSort} indicator={indicator} />
+                  <SortableTh column="benchmarkRelativeReturnPct" label={`Vs ${report.benchmarkSymbol ?? "benchmark"} %`} align="end" onSort={handleSort} indicator={indicator} />
                   <SortableTh column="volatilityAnnual" label="Volatility %" align="end" onSort={handleSort} indicator={indicator} />
                   <SortableTh column="beta" label="Beta" align="end" onSort={handleSort} indicator={indicator} />
                   <SortableTh column="sentimentLabel" label="Sentiment" onSort={handleSort} indicator={indicator} />
@@ -191,11 +212,19 @@ export default function RiskPage() {
                 </tr>
               </thead>
               <tbody>
-                {sort(report.stockSummaries).map((s: any) => (
+                {sort(report.stockSummaries).map((s) => (
                   <tr key={s.symbol}>
+                    <td>
+                      <span className={`badge text-bg-${s.priorityRank === 1 ? "success" : s.priorityRank === 2 ? "danger" : "secondary"}`}>
+                        {s.priorityRank} · {s.priorityRank === 1 ? "Increase" : s.priorityRank === 2 ? "Reduce" : "Hold"}
+                      </span>
+                    </td>
+                    <td className="text-end">{s.categoryRank}</td>
+                    <td className="text-end">{s.rankingScore.toFixed(1)}</td>
                     <td className="fw-semibold">{s.symbol}</td>
                     <td>{s.sector}</td>
                     <td className="text-end">{s.weight.toFixed(2)}</td>
+                    <td className="text-end">{s.benchmarkRelativeReturnPct === null ? "—" : `${s.benchmarkRelativeReturnPct.toFixed(2)}%`}</td>
                     <td className="text-end">{s.volatilityAnnual ?? 0}</td>
                     <td className="text-end">{s.beta ?? "—"}</td>
                     <td>

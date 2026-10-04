@@ -271,7 +271,7 @@ function buildSectorAllocation(recommendations: StockRecommendation[]): Record<s
 export async function resolveRecommendationUniverse(options: { scope?: "nifty" | "multicap"; includeHoldings?: boolean }): Promise<string[]> {
   const scope = options.scope ?? "multicap";
   if (scope === "nifty") {
-    return NIFTY_50_SYMBOLS;
+    return [...NIFTY_50_SYMBOLS];
   }
 
   const scrapedRecommendationsResult = await scrapeRecommendations();

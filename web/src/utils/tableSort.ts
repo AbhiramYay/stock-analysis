@@ -19,13 +19,18 @@ export function compareValues(
   return order === "asc" ? cmp : -cmp;
 }
 
-export function sortRows<T extends Record<string, unknown>>(
+export function sortRows<T extends object>(
   rows: T[],
   column: string,
   order: "asc" | "desc"
 ): T[] {
   return [...rows].sort((a, b) =>
-    compareValues(a[column], b[column], column, order)
+    compareValues(
+      (a as Record<string, unknown>)[column],
+      (b as Record<string, unknown>)[column],
+      column,
+      order
+    )
   );
 }
 
@@ -64,7 +69,7 @@ export function useTableSort(
   );
 
   const sort = useCallback(
-    <T extends Record<string, unknown>>(rows: T[]) =>
+    <T extends object>(rows: T[]) =>
       sortRows(rows, sortColumn, sortOrder),
     [sortColumn, sortOrder]
   );

@@ -16,16 +16,17 @@ import {
 } from "../utils/newsSentiment";
 import { convertKeywordSentiment } from "../utils/llmSentiment";
 import { scopedLogger } from "../utils/logger";
+import { rankRiskSummaries } from "../utils/riskRanking";
 import type {
   Holding,
   PortfolioRiskSentimentReport,
   RiskAction,
-  SentimentLabel,
   StockRiskMetrics,
   EnhancedSentimentResult,
 } from "../types/index";
 
 const log = scopedLogger("riskSentiment");
+type UnrankedStockRiskMetrics = Omit<StockRiskMetrics, "priorityRank" | "categoryRank" | "rankingScore">;
 
 const SECTOR_MAP: Record<string, string> = {
   INFY: "Information Technology",
@@ -120,6 +121,11 @@ function standardDeviation(values: number[]): number {
   return Math.sqrt(variance(values));
 }
 
+function cumulativeReturnPct(returns: number[]): number | null {
+  if (returns.length === 0) return null;
+  return (returns.reduce((total, value) => total * (1 + value), 1) - 1) * 100;
+}
+
 function covariance(x: number[], y: number[]): number {
   const n = Math.min(x.length, y.length);
   if (n === 0) return 0;
@@ -166,7 +172,7 @@ async function computeStockRiskMetrics(
   topCorrelationValue: number | null,
   lookbackDays: number,
   precomputedSentiment?: EnhancedSentimentResult
-): Promise<StockRiskMetrics> {
+): Promise<UnrankedStockRiskMetrics> {
   const symbol = normalizeSymbol(holding.symbol);
   const from = subDays(new Date(), lookbackDays);
 
@@ -179,6 +185,12 @@ async function computeStockRiskMetrics(
 
   let beta: number | null = null;
   const aligned = alignReturns({ dates, returns }, referenceReturns);
+  const periodReturnPct = cumulativeReturnPct(returns);
+  const alignedStockReturnPct = cumulativeReturnPct(aligned.a);
+  const alignedBenchmarkReturnPct = cumulativeReturnPct(aligned.b);
+  const benchmarkRelativeReturnPct = alignedStockReturnPct === null || alignedBenchmarkReturnPct === null
+    ? null
+    : alignedStockReturnPct - alignedBenchmarkReturnPct;
   if (aligned.a.length >= 10 && referenceReturns.returns.length >= 10) {
     const varBenchmark = variance(aligned.b);
     if (varBenchmark > 0) {
@@ -242,6 +254,10 @@ async function computeStockRiskMetrics(
     symbol,
     sector,
     weight,
+    sectorWeightPct: Number((sectorWeights[sector] ?? 0).toFixed(2)),
+    periodReturnPct: periodReturnPct === null ? null : Number(periodReturnPct.toFixed(2)),
+    benchmarkRelativeReturnPct:
+      benchmarkRelativeReturnPct === null ? null : Number(benchmarkRelativeReturnPct.toFixed(2)),
     volatilityAnnual: Number(volatilityAnnual.toFixed(2)),
     beta: beta === null ? null : Number(beta.toFixed(2)),
     averageCorrelation: Number((symbolCorrelations[symbol] ?? 0).toFixed(2)),
@@ -335,7 +351,7 @@ export async function analyzePortfolioRiskSentiment(
 
   const symbolCorrelationAverages = await computePairwiseCorrelations(holdings, lookbackDays);
 
-  const stockSummaries: StockRiskMetrics[] = [];
+  const stockSummaries: UnrankedStockRiskMetrics[] = [];
   const sectorRiskAlerts: string[] = [];
   const overallRecommendations: string[] = [];
   const riskHighlights: string[] = [];
@@ -417,24 +433,7 @@ export async function analyzePortfolioRiskSentiment(
     }
   }
 
-  stockSummaries.sort((a, b) => {
-    const sentimentOrder: Record<SentimentLabel, number> = {
-      negative: 0,
-      neutral: 1,
-      positive: 2,
-    };
-    const actionOrder: Record<RiskAction, number> = {
-      REDUCE: 0,
-      "CONSIDER REDUCE": 1,
-      HOLD: 2,
-      "CONSIDER INCREASE": 3,
-      INCREASE: 4,
-    };
-
-    const sentimentDelta = sentimentOrder[a.sentimentLabel] - sentimentOrder[b.sentimentLabel];
-    if (sentimentDelta !== 0) return sentimentDelta;
-    return actionOrder[a.recommendedAction] - actionOrder[b.recommendedAction];
-  });
+  const rankedStockSummaries = rankRiskSummaries(stockSummaries);
 
   for (const [sector, weight] of Object.entries(sectorWeights)) {
     if (weight >= 35) {
@@ -453,7 +452,7 @@ export async function analyzePortfolioRiskSentiment(
   return {
     benchmarkSymbol,
     sectorWeights,
-    stockSummaries,
+    stockSummaries: rankedStockSummaries,
     overallRecommendations,
     riskHighlights,
     generatedAt: new Date(),

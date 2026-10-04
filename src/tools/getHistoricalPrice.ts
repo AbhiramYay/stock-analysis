@@ -14,7 +14,7 @@ const log = scopedLogger("getHistoricalPrice");
 
 // ─── LangChain Tool Definition ────────────────────────────────────────────────
 
-export const getHistoricalPriceTool = new DynamicStructuredTool({
+const getHistoricalPriceToolConfig: any = {
   name: "getHistoricalPrice",
   description:
     "Fetch the OHLCV (open, high, low, close, volume) price data for a given stock symbol " +
@@ -86,4 +86,6 @@ export const getHistoricalPriceTool = new DynamicStructuredTool({
       return JSON.stringify({ error: msg });
     }
   },
-});
+};
+
+export const getHistoricalPriceTool = new DynamicStructuredTool(getHistoricalPriceToolConfig) as unknown as DynamicStructuredTool;

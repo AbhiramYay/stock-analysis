@@ -137,7 +137,7 @@ export function computeRebalancingPlan(
 
 // ─── LangChain Tool Definition ────────────────────────────────────────────────
 
-export const rebalancePortfolioTool = new DynamicStructuredTool({
+const rebalancePortfolioToolConfig: any = {
   name: "rebalancePortfolio",
   description:
     "Compare the current portfolio holdings and their weights against the provided target weights. " +
@@ -201,4 +201,6 @@ export const rebalancePortfolioTool = new DynamicStructuredTool({
       return JSON.stringify({ error: msg });
     }
   },
-});
+};
+
+export const rebalancePortfolioTool = new DynamicStructuredTool(rebalancePortfolioToolConfig) as unknown as DynamicStructuredTool;

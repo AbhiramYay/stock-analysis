@@ -221,6 +221,10 @@ export function printRiskSentimentReport(report: PortfolioRiskSentimentReport): 
   console.log(chalk.bold.cyan("\n🔎 Portfolio Risk & Sentiment Analysis\n"));
 
   const headers = [
+    chalk.bold("Priority"),
+    chalk.bold("Group Rank"),
+    chalk.bold("Score"),
+    chalk.bold("Vs Index %"),
     chalk.bold("Symbol"),
     chalk.bold("Sector"),
     chalk.bold("Weight %"),
@@ -232,6 +236,14 @@ export function printRiskSentimentReport(report: PortfolioRiskSentimentReport): 
   ];
 
   const rows = report.stockSummaries.map((summary) => [
+    summary.priorityRank === 1
+      ? chalk.green("1 Increase")
+      : summary.priorityRank === 2
+      ? chalk.red("2 Reduce")
+      : chalk.grey("3 Hold"),
+    summary.categoryRank.toString(),
+    summary.rankingScore.toFixed(1),
+    summary.benchmarkRelativeReturnPct === null ? "n/a" : `${summary.benchmarkRelativeReturnPct.toFixed(2)}%`,
     chalk.white(summary.symbol),
     chalk.white(summary.sector),
     `${summary.weight.toFixed(1)}%`,
@@ -250,7 +262,7 @@ export function printRiskSentimentReport(report: PortfolioRiskSentimentReport): 
       : chalk.yellow(summary.recommendedAction),
   ]);
 
-  console.log(table([headers, ...rows], { columns: { 2: { alignment: "right" }, 3: { alignment: "right" }, 4: { alignment: "right" }, 5: { alignment: "right" } } }));
+  console.log(table([headers, ...rows], { columns: { 1: { alignment: "right" }, 2: { alignment: "right" }, 3: { alignment: "right" }, 6: { alignment: "right" }, 7: { alignment: "right" }, 8: { alignment: "right" }, 9: { alignment: "right" } } }));
 
   if (report.riskHighlights.length > 0) {
     console.log(chalk.bold("  Risk Highlights:"));

@@ -14,6 +14,7 @@ import {
 } from "./agents/rebalancingAgent";
 import { computeRebalancingPlan } from "./tools/rebalancePortfolio";
 import { executeBatchOrders } from "./tools/placeOrder";
+import type { OrderType, TransactionType } from "./types/index";
 
 const log = scopedLogger("server");
 
@@ -236,11 +237,11 @@ app.post("/api/rebalance/execute", async (req, res) => {
     if (!plan.suggestions || plan.suggestions.length === 0) return res.json({ plan, results: [] });
 
     // Map suggestions to order shape expected by executeBatchOrders
-    const orders = plan.suggestions.map((s) => ({
+    const orders: Array<{ symbol: string; transactionType: TransactionType; quantity: number; orderType: OrderType }> = plan.suggestions.map((s) => ({
       symbol: s.symbol,
-      transactionType: s.action as any,
+      transactionType: s.action,
       quantity: s.quantity,
-      orderType: "MARKET",
+      orderType: "MARKET" as OrderType,
     }));
 
     const results = await executeBatchOrders(orders);

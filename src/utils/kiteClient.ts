@@ -190,7 +190,7 @@ async function fetchHistoricalPricesViaYahoo(
     if (!quote) return [];
 
     const candles: KiteOHLC[] = result.timestamp
-      .map((ts: number, idx: number) => ({
+      .map((ts: number, idx: number): KiteOHLC => ({
         date: new Date(ts * 1000),
         open: quote.open[idx],
         high: quote.high[idx],
@@ -198,7 +198,7 @@ async function fetchHistoricalPricesViaYahoo(
         close: quote.close[idx],
         volume: quote.volume[idx],
       }))
-      .filter((c) => c.open !== null && c.high !== null && c.low !== null && c.close !== null);
+      .filter((c: KiteOHLC) => c.open !== null && c.high !== null && c.low !== null && c.close !== null);
 
     return candles;
   } catch (err) {
